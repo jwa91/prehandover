@@ -34,6 +34,7 @@ type Check struct {
 	Priority      int               `toml:"priority"`
 	Budget        Duration          `toml:"budget"`
 	Description   string            `toml:"description"`
+	Shell         string            `toml:"shell"` // sh|bash — when set, entry is run via <shell> -c
 }
 
 // Duration parses Go duration strings like "500ms", "3s", "1m".

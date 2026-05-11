@@ -157,21 +157,34 @@ func runCheck(ctx context.Context, c config.Check, files []string, remaining tim
 	cctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
-	parts, err := splitEntry(c.Entry)
-	if err != nil {
-		return Result{ID: c.ID, Status: StatusError, Reason: err.Error(), Budget: budget}
-	}
-	args := append([]string{}, parts[1:]...)
-	args = append(args, c.Args...)
-	if c.PassFilenames.Effective() {
-		if c.PassFilenames.Limit > 0 && len(files) > c.PassFilenames.Limit {
-			files = files[:c.PassFilenames.Limit]
+	var name string
+	var args []string
+	if c.Shell != "" {
+		// Run entry through a shell. Filenames become positional args ($1, $2, ...).
+		// The "_" is $0 (script name placeholder).
+		name = c.Shell
+		args = []string{"-c", c.Entry, "_"}
+		args = append(args, c.Args...)
+		if c.PassFilenames.Effective() {
+			files = limitFiles(files, c.PassFilenames.Limit)
+			args = append(args, files...)
 		}
-		args = append(args, files...)
+	} else {
+		parts, err := splitEntry(c.Entry)
+		if err != nil {
+			return Result{ID: c.ID, Status: StatusError, Reason: err.Error(), Budget: budget}
+		}
+		name = parts[0]
+		args = append([]string{}, parts[1:]...)
+		args = append(args, c.Args...)
+		if c.PassFilenames.Effective() {
+			files = limitFiles(files, c.PassFilenames.Limit)
+			args = append(args, files...)
+		}
 	}
 
 	start := time.Now()
-	cmd := exec.CommandContext(cctx, parts[0], args...)
+	cmd := exec.CommandContext(cctx, name, args...)
 	cmd.Env = os.Environ()
 	for k, v := range c.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
@@ -197,6 +210,13 @@ func runCheck(ctx context.Context, c config.Check, files []string, remaining tim
 		r.Output = ""
 	}
 	return r
+}
+
+func limitFiles(files []string, limit int) []string {
+	if limit > 0 && len(files) > limit {
+		return files[:limit]
+	}
+	return files
 }
 
 func splitEntry(entry string) ([]string, error) {
