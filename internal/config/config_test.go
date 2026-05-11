@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,7 +12,18 @@ func write(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "prehandover.toml")
-	if err := os.WriteFile(p, []byte(body), 0644); err != nil {
+	manifest := `
+[manifest]
+project = "test"
+moments = ["agent_stop"]
+adapters = ["claude"]
+required_prehandover = "0.1.0"
+`
+	full := body + manifest
+	if idx := strings.Index(body, "[[checks]]"); idx >= 0 {
+		full = body[:idx] + manifest + body[idx:]
+	}
+	if err := os.WriteFile(p, []byte(full), 0644); err != nil {
 		t.Fatal(err)
 	}
 	return p
@@ -38,6 +50,9 @@ entry = "true"
 	}
 	if cfg.Checks[0].Budget.Duration != 5*time.Second {
 		t.Errorf("check budget should inherit global, got %s", cfg.Checks[0].Budget.Duration)
+	}
+	if cfg.Manifest.Project != "test" {
+		t.Errorf("manifest project = %q", cfg.Manifest.Project)
 	}
 }
 
@@ -148,8 +163,29 @@ budget = "250ms"
 }
 
 func TestLoad_InvalidDuration(t *testing.T) {
-	p := write(t, `budget = "not-a-duration"`)
+	p := write(t, `
+budget = "not-a-duration"
+
+[[checks]]
+id = "x"
+entry = "true"
+`)
 	if _, err := Load(p); err == nil {
 		t.Error("expected error on bad duration")
+	}
+}
+
+func TestLoad_ManifestRequired(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "prehandover.toml")
+	if err := os.WriteFile(p, []byte(`
+[[checks]]
+id = "x"
+entry = "true"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(p); err == nil {
+		t.Error("expected error when manifest is missing")
 	}
 }

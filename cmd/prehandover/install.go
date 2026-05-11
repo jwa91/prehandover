@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	claudeHandoverCmd = "prehandover hook claude handover"
-	codexHandoverCmd  = "prehandover hook codex handover"
-	cursorHandoverCmd = "prehandover hook cursor handover"
+	claudeAgentStopCmd = "prehandover hook claude agent_stop"
+	codexAgentStopCmd  = "prehandover hook codex agent_stop"
+	cursorAgentStopCmd = "prehandover hook cursor agent_stop"
 )
 
 func cmdInstall(args []string) int {
@@ -76,7 +76,7 @@ func installClaudeAt(path string, printOnly bool) int {
 	return 0
 }
 
-// mergeClaudeStopHook adds prehandover's Stop hook to the settings map.
+// mergeClaudeStopHook adds prehandover's agent_stop hook to the settings map.
 // Returns true if a change was made, false if it was already present.
 func mergeClaudeStopHook(settings map[string]any) bool {
 	hooks, _ := settings["hooks"].(map[string]any)
@@ -85,7 +85,7 @@ func mergeClaudeStopHook(settings map[string]any) bool {
 		settings["hooks"] = hooks
 	}
 	stop, _ := hooks["Stop"].([]any)
-	if hasNestedCommand(stop, claudeHandoverCmd) {
+	if hasNestedCommand(stop, claudeAgentStopCmd) {
 		return false
 	}
 	entry := map[string]any{
@@ -93,7 +93,7 @@ func mergeClaudeStopHook(settings map[string]any) bool {
 		"hooks": []any{
 			map[string]any{
 				"type":    "command",
-				"command": claudeHandoverCmd,
+				"command": claudeAgentStopCmd,
 			},
 		},
 	}
@@ -162,14 +162,14 @@ func mergeCodexStopHook(settings map[string]any) bool {
 		settings["hooks"] = hooks
 	}
 	stop, _ := hooks["Stop"].([]any)
-	if hasNestedCommand(stop, codexHandoverCmd) {
+	if hasNestedCommand(stop, codexAgentStopCmd) {
 		return false
 	}
 	entry := map[string]any{
 		"hooks": []any{
 			map[string]any{
 				"type":    "command",
-				"command": codexHandoverCmd,
+				"command": codexAgentStopCmd,
 			},
 		},
 	}
@@ -223,11 +223,11 @@ func mergeCursorStopHook(settings map[string]any) bool {
 		changed = true
 	}
 	stop, _ := hooks["stop"].([]any)
-	if hasFlatCommand(stop, cursorHandoverCmd) {
+	if hasFlatCommand(stop, cursorAgentStopCmd) {
 		return changed
 	}
 	hooks["stop"] = append(stop, map[string]any{
-		"command":    cursorHandoverCmd,
+		"command":    cursorAgentStopCmd,
 		"loop_limit": nil,
 	})
 	return true

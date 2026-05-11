@@ -13,23 +13,23 @@ import (
 type Moment string
 
 const (
-	MomentHandover          Moment = "handover"
+	MomentAgentStop         Moment = "agent_stop"
 	MomentSessionContext    Moment = "session_context"
 	MomentPromptIngress     Moment = "prompt_ingress"
 	MomentToolPreflight     Moment = "tool_preflight"
 	MomentToolResult        Moment = "tool_result"
-	MomentWorkerHandover    Moment = "worker_handover"
+	MomentWorkerStop        Moment = "worker_stop"
 	MomentContextCompaction Moment = "context_compaction"
 	MomentSessionEnd        Moment = "session_end"
 )
 
 var ReservedMoments = []Moment{
-	MomentHandover,
+	MomentAgentStop,
 	MomentSessionContext,
 	MomentPromptIngress,
 	MomentToolPreflight,
 	MomentToolResult,
-	MomentWorkerHandover,
+	MomentWorkerStop,
 	MomentContextCompaction,
 	MomentSessionEnd,
 }
@@ -119,7 +119,7 @@ type decisionAdapter struct {
 
 func (a decisionAdapter) Name() string { return a.name }
 
-func (a decisionAdapter) Supports(m Moment) bool { return m == MomentHandover }
+func (a decisionAdapter) Supports(m Moment) bool { return m == MomentAgentStop }
 
 func (a decisionAdapter) Decode(m Moment, input []byte) (Invocation, error) {
 	raw, err := decodeRaw(input)
@@ -159,7 +159,7 @@ type cursorAdapter struct{}
 
 func (a cursorAdapter) Name() string { return "cursor" }
 
-func (a cursorAdapter) Supports(m Moment) bool { return m == MomentHandover }
+func (a cursorAdapter) Supports(m Moment) bool { return m == MomentAgentStop }
 
 func (a cursorAdapter) Decode(m Moment, input []byte) (Invocation, error) {
 	raw, err := decodeRaw(input)

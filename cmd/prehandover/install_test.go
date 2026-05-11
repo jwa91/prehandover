@@ -92,8 +92,8 @@ func TestMergeClaudeStopHook_EmittedCommandShape(t *testing.T) {
 	if hook["type"] != "command" {
 		t.Errorf("type = %v, want command", hook["type"])
 	}
-	if hook["command"] != claudeHandoverCmd {
-		t.Errorf("command = %v, want %s", hook["command"], claudeHandoverCmd)
+	if hook["command"] != claudeAgentStopCmd {
+		t.Errorf("command = %v, want %s", hook["command"], claudeAgentStopCmd)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestHasNestedCommand(t *testing.T) {
 		}, false},
 		{"matching_command", []any{
 			map[string]any{"hooks": []any{
-				map[string]any{"type": "command", "command": claudeHandoverCmd},
+				map[string]any{"type": "command", "command": claudeAgentStopCmd},
 			}},
 		}, true},
 		{"old_command_does_not_match", []any{
@@ -127,7 +127,7 @@ func TestHasNestedCommand(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := hasNestedCommand(tc.stop, claudeHandoverCmd)
+			got := hasNestedCommand(tc.stop, claudeAgentStopCmd)
 			if got != tc.want {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -147,7 +147,7 @@ func TestInstallClaudeAt_CreatesFileAndDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(string(data), claudeHandoverCmd) {
+	if !strings.Contains(string(data), claudeAgentStopCmd) {
 		t.Errorf("file does not contain hook command:\n%s", data)
 	}
 	var settings map[string]any
@@ -219,8 +219,8 @@ func TestMergeCodexStopHook_EmittedCommandShape(t *testing.T) {
 	if hook["type"] != "command" {
 		t.Errorf("type = %v, want command", hook["type"])
 	}
-	if hook["command"] != codexHandoverCmd {
-		t.Errorf("command = %v, want %s", hook["command"], codexHandoverCmd)
+	if hook["command"] != codexAgentStopCmd {
+		t.Errorf("command = %v, want %s", hook["command"], codexAgentStopCmd)
 	}
 }
 
@@ -248,8 +248,8 @@ func TestMergeCursorStopHook_EmittedCommandShape(t *testing.T) {
 	}
 	stop := settings["hooks"].(map[string]any)["stop"].([]any)
 	hook := stop[0].(map[string]any)
-	if hook["command"] != cursorHandoverCmd {
-		t.Errorf("command = %v, want %s", hook["command"], cursorHandoverCmd)
+	if hook["command"] != cursorAgentStopCmd {
+		t.Errorf("command = %v, want %s", hook["command"], cursorAgentStopCmd)
 	}
 	if _, ok := hook["loop_limit"]; !ok {
 		t.Error("loop_limit key missing")

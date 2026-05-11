@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Manifest    Manifest `toml:"manifest"`
 	Budget      Duration `toml:"budget"`
 	Parallelism string   `toml:"parallelism"`
 	OnUnchanged string   `toml:"on_unchanged"`
@@ -16,7 +17,13 @@ type Config struct {
 	Files       Pattern  `toml:"files"`
 	Exclude     Pattern  `toml:"exclude"`
 	Checks      []Check  `toml:"checks"`
-	MinVersion  string   `toml:"minimum_prehandover_version"`
+}
+
+type Manifest struct {
+	Project             string   `toml:"project"`
+	Moments             []string `toml:"moments"`
+	Adapters            []string `toml:"adapters"`
+	RequiredPrehandover string   `toml:"required_prehandover"`
 }
 
 type Check struct {
@@ -120,6 +127,18 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if _, err := toml.Decode(string(data), &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if cfg.Manifest.Project == "" {
+		return nil, fmt.Errorf("parse %s: manifest.project is required", path)
+	}
+	if len(cfg.Manifest.Moments) == 0 {
+		return nil, fmt.Errorf("parse %s: manifest.moments is required", path)
+	}
+	if len(cfg.Manifest.Adapters) == 0 {
+		return nil, fmt.Errorf("parse %s: manifest.adapters is required", path)
+	}
+	if cfg.Manifest.RequiredPrehandover == "" {
+		return nil, fmt.Errorf("parse %s: manifest.required_prehandover is required", path)
 	}
 	if cfg.Budget.Duration == 0 {
 		cfg.Budget.Duration = 5 * time.Second

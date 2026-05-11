@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "prehandover hook claude agent_stop",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  }
+}

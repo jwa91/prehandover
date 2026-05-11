@@ -1,10 +1,10 @@
 # prehandover
 
-The unified hook for agent-to-human handovers.
+Unified validation for the moment an agent is about to stop.
 
 Pre-commit and CI run at *commit* and *PR* boundaries. But an agent session crosses dozens of edit→test→edit cycles inside a single commit, and the quality contract for those micro-cycles is currently configured *per agent harness* — Claude Code hooks, Codex config, Cursor rules — instead of *per codebase*.
 
-prehandover is one config in your repo that every harness can call at the agent-stop boundary. Same checks and same budget, with harness-specific hook responses handled by adapters.
+prehandover is one config in your repo that every harness can call at the `agent_stop` boundary. Same checks and same budget, with harness-specific hook responses handled by adapters.
 
 ## Install
 
@@ -18,6 +18,7 @@ go install github.com/jwa/prehandover/cmd/prehandover@latest
 cd your-repo
 prehandover init           # writes prehandover.toml
 prehandover validate       # parses + reports
+prehandover doctor         # verifies manifest and installed harness adapters
 prehandover run            # runs the checks
 ```
 
@@ -35,11 +36,24 @@ prehandover install codex        # writes .codex/hooks.json and enables codex_ho
 prehandover install cursor       # writes .cursor/hooks.json
 ```
 
-The installed hook calls `prehandover hook <harness> handover` at the agent-stop boundary. When a check fails, the adapter emits the harness-specific continuation response and the agent is prompted to fix before stopping.
+The installed hook calls `prehandover hook <harness> agent_stop` at the agent-stop boundary. When a check fails, the adapter emits the harness-specific continuation response and the agent is prompted to fix before stopping.
 
 ## Config
 
-`prehandover.toml` clones the [prek](https://prek.j178.dev) field surface — TOML, inline tables, regex or `{glob = "..."}` filters. Notable additions:
+`prehandover.toml` starts with a repo-owned manifest that declares the active lifecycle moments and harness adapters:
+
+```toml
+budget = "5s"
+parallelism = "auto"
+
+[manifest]
+project = "your-repo"
+moments = ["agent_stop"]
+adapters = ["claude", "codex", "cursor"]
+required_prehandover = "0.1.0"
+```
+
+`prehandover.toml` clones the [prek](https://prek.j178.dev) check field surface — TOML, inline tables, regex or `{glob = "..."}` filters. Notable additions:
 
 - **`budget`** — Go duration string per check and globally. Hard timeout, distinguished from `fail`.
 - **`on_unchanged = "skip"`** — default. Skip checks whose `files` glob doesn't intersect the changeset.
@@ -82,9 +96,9 @@ Exit codes: `0` pass, `1` fail, `2` config error, `3` budget exceeded with no fa
 
 ## Hook adapters
 
-`prehandover` names semantic agent-loop boundaries **moments**. The only implemented moment is currently `handover`, which means "the agent is about to hand control back to the human." Harness adapters map that moment onto each product's hook names and response schema.
+`prehandover` names semantic agent-loop boundaries **moments**. The only implemented moment is currently `agent_stop`, which means "the agent is about to stop." Harness adapters map that moment onto each product's hook names and response schema.
 
-Supported handover adapters:
+Supported `agent_stop` adapters:
 
 | Harness | Installed event | Failure response |
 |---|---|---|
@@ -92,7 +106,11 @@ Supported handover adapters:
 | Codex | `Stop` | `{"decision":"block","reason":"..."}` |
 | Cursor | `stop` | `{"followup_message":"..."}` |
 
-Reserved future moments: `session_context`, `prompt_ingress`, `tool_preflight`, `tool_result`, `worker_handover`, `context_compaction`, and `session_end`. Not every harness exposes every moment, so future adapters should advertise capabilities instead of pretending the lifecycle is uniform everywhere.
+Reserved future moments: `session_context`, `prompt_ingress`, `tool_preflight`, `tool_result`, `worker_stop`, `context_compaction`, and `session_end`. Not every harness exposes every moment, so future adapters should advertise capabilities instead of pretending the lifecycle is uniform everywhere.
+
+## Proof artifacts
+
+Every `agent_stop` hook run writes `.prehandover/runs/latest.json`. This file records the moment, harness, config hash, changed files, check results, timing, and rejection category. The path is gitignored because it is a local run artifact, but it gives the next human or agent a durable stop record.
 
 ## Changeset detection
 
@@ -100,7 +118,7 @@ Reserved future moments: `session_context`, `prompt_ingress`, `tool_preflight`, 
 
 ## Scope
 
-prehandover sits at the **agent-to-human handover boundary** — the moment the agent stops and hands control back. That's the gap that current tooling doesn't fill.
+prehandover sits at the **agent-stop boundary** — the moment an agent is about to stop before the next actor takes over. That's the gap that current tooling doesn't fill.
 
 It is **not**:
 
@@ -111,7 +129,7 @@ Higher-level loops have hooks that are perfectly fine. prehandover only addresse
 
 ## Status
 
-Early. `handover` works and self-hosts. Currently supports Claude Code, Codex, and Cursor. Pi / Amp / opencode adapters are on the roadmap when usable handover hooks exist.
+Early. `agent_stop` works and self-hosts. Currently supports Claude Code, Codex, and Cursor. Pi / Amp / opencode adapters are on the roadmap when usable agent-stop hooks exist.
 
 ## Credits
 

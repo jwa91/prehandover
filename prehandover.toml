@@ -8,6 +8,12 @@ fail_fast = false
 
 exclude = { glob = [".git/**", "prehandover", "dist/**"] }
 
+[manifest]
+project = "prehandover"
+moments = ["agent_stop"]
+adapters = ["claude", "codex", "cursor"]
+required_prehandover = "0.1.0"
+
 [[checks]]
 id = "gofmt"
 entry = "./scripts/gofmt-strict.sh"

@@ -2,10 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://prehandover.local/schema.json",
   "title": "prehandover.toml",
-  "description": "Configuration for prehandover — the unified hook for agent-to-human handovers. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once the repo goes public.",
+  "description": "Configuration for prehandover — unified agent-stop validation. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once the repo goes public.",
   "type": "object",
   "additionalProperties": false,
+  "required": ["manifest"],
   "properties": {
+    "manifest": { "$ref": "#/$defs/manifest" },
     "budget": {
       "$ref": "#/$defs/duration",
       "description": "Total wall-clock budget for the whole run."
@@ -30,13 +32,46 @@
     "checks": {
       "type": "array",
       "items": { "$ref": "#/$defs/check" }
-    },
-    "minimum_prehandover_version": {
-      "description": "Require a minimum prehandover version, e.g. \"0.2.0\".",
-      "type": "string"
     }
   },
   "$defs": {
+    "manifest": {
+      "description": "Repo-owned operating contract for active lifecycle moments and harness adapters.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "moments", "adapters", "required_prehandover"],
+      "properties": {
+        "project": { "type": "string", "minLength": 1 },
+        "moments": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "agent_stop",
+              "session_context",
+              "prompt_ingress",
+              "tool_preflight",
+              "tool_result",
+              "worker_stop",
+              "context_compaction",
+              "session_end"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "adapters": {
+          "type": "array",
+          "items": { "enum": ["claude", "codex", "cursor"] },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "required_prehandover": {
+          "description": "Minimum required prehandover binary version, e.g. \"0.1.0\".",
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
     "duration": {
       "description": "Go duration string, e.g. \"500ms\", \"3s\", \"1m\".",
       "type": "string",

@@ -1,5 +1,6 @@
 /prehandover
 /dist/
+/.prehandover/runs/
 *.test
 *.out
 .DS_Store

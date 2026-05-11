@@ -11,12 +11,13 @@ import (
 	"github.com/jwa91/prehandover/internal/changeset"
 	"github.com/jwa91/prehandover/internal/config"
 	"github.com/jwa91/prehandover/internal/lifecycle"
+	"github.com/jwa91/prehandover/internal/proof"
 	"github.com/jwa91/prehandover/internal/report"
 	"github.com/jwa91/prehandover/internal/runner"
 )
 
 const sampleConfig = `#:schema ./schema.json
-# prehandover — unified hook for agent-to-human handovers
+# prehandover — unified agent-stop validation
 
 budget = "5s"
 parallelism = "auto"
@@ -24,6 +25,12 @@ on_unchanged = "skip"
 fail_fast = false
 
 exclude = { glob = ["node_modules/**", "dist/**", "build/**", ".git/**"] }
+
+[manifest]
+project = "your-repo"
+moments = ["agent_stop"]
+adapters = ["claude", "codex", "cursor"]
+required_prehandover = "0.1.0"
 
 # [[checks]]
 # id = "typecheck"
@@ -40,11 +47,12 @@ exclude = { glob = ["node_modules/**", "dist/**", "build/**", ".git/**"] }
 `
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `prehandover — unified hook for agent-to-human handovers
+	fmt.Fprintln(os.Stderr, `prehandover — unified agent-stop validation
 
 Usage:
   prehandover run [--format=human|json] [--config=prehandover.toml]
-  prehandover hook <harness> [moment] [--config=prehandover.toml]
+  prehandover hook <harness> [agent_stop] [--config=prehandover.toml]
+  prehandover doctor [--config=prehandover.toml]
   prehandover init [--path=prehandover.toml] [--force]
   prehandover validate [--config=prehandover.toml]
   prehandover install [--print] <harness>    (supported: claude, codex, cursor)
@@ -63,6 +71,8 @@ func main() {
 		os.Exit(cmdRun(os.Args[2:]))
 	case "hook":
 		os.Exit(cmdHook(os.Args[2:]))
+	case "doctor":
+		os.Exit(cmdDoctor(os.Args[2:]))
 	case "init":
 		os.Exit(cmdInit(os.Args[2:]))
 	case "validate":
@@ -128,7 +138,7 @@ func cmdHook(args []string) int {
 	parsed, err := parseHookArgs(args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprintln(os.Stderr, "usage: prehandover hook <harness> [moment] [--config=prehandover.toml]")
+		fmt.Fprintln(os.Stderr, "usage: prehandover hook <harness> [agent_stop] [--config=prehandover.toml]")
 		return 2
 	}
 	adapter, ok := lifecycle.ForHarness(parsed.harness)
@@ -148,27 +158,32 @@ func cmdHook(args []string) int {
 	}
 	inv, err := adapter.Decode(parsed.moment, input)
 	if err != nil {
-		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover could not parse hook input: %v", err))
+		inv = lifecycle.Invocation{Harness: adapter.Name(), Moment: parsed.moment}
+		return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "hook_input_error", fmt.Errorf("prehandover could not parse hook input: %w", err))
 	}
 	if inv.CWD != "" {
 		if err := os.Chdir(inv.CWD); err != nil {
-			return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover could not use hook cwd %q: %v", inv.CWD, err))
+			return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "execution_error", fmt.Errorf("prehandover could not use hook cwd %q: %w", inv.CWD, err))
 		}
 	}
 
 	cfg, err := config.Load(parsed.configPath)
 	if err != nil {
-		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover configuration error: %v", err))
+		return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "config_error", fmt.Errorf("prehandover configuration error: %w", err))
 	}
 	changed, err := changeset.Changed(".")
 	if err != nil {
-		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover changeset error: %v", err))
+		return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "changeset_error", fmt.Errorf("prehandover changeset error: %w", err))
 	}
 	run, err := runner.Execute(context.Background(), cfg, changed)
 	if err != nil {
-		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover execution error: %v", err))
+		return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "execution_error", fmt.Errorf("prehandover execution error: %w", err))
 	}
-	if err := adapter.Encode(parsed.moment, lifecycle.OutcomeFromRun(run), os.Stdout); err != nil {
+	outcome := lifecycle.OutcomeFromRun(run)
+	if err := proof.WriteLatest(proof.FromRun(inv, parsed.configPath, changed, outcome)); err != nil {
+		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover proof error: %v", err))
+	}
+	if err := adapter.Encode(parsed.moment, outcome, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
@@ -183,7 +198,7 @@ type hookArgs struct {
 
 func parseHookArgs(args []string) (hookArgs, error) {
 	out := hookArgs{
-		moment:     lifecycle.MomentHandover,
+		moment:     lifecycle.MomentAgentStop,
 		configPath: "prehandover.toml",
 	}
 	var positional []string
@@ -220,6 +235,13 @@ func encodeHookFailure(adapter lifecycle.Adapter, moment lifecycle.Moment, messa
 		return 2
 	}
 	return 0
+}
+
+func encodeHookFailureWithProof(adapter lifecycle.Adapter, moment lifecycle.Moment, inv lifecycle.Invocation, configPath string, category string, err error) int {
+	if proofErr := proof.WriteLatest(proof.Failure(inv, configPath, category, err)); proofErr != nil {
+		return encodeHookFailure(adapter, moment, fmt.Sprintf("%v\n\nAdditionally, prehandover could not write proof artifact: %v", err, proofErr))
+	}
+	return encodeHookFailure(adapter, moment, err.Error())
 }
 
 func cmdInit(args []string) int {

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "prehandover hook codex agent_stop",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

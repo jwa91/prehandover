@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "stop": [
+      {
+        "command": "prehandover hook cursor agent_stop",
+        "loop_limit": null
+      }
+    ]
+  },
+  "version": 1
+}
