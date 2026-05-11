@@ -19,49 +19,26 @@ func cmdInstall(args []string) int {
 	flags.Parse(args)
 	rest := flags.Args()
 	if len(rest) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: prehandover install <harness>\n\nsupported: claude")
+		fmt.Fprintln(os.Stderr, "usage: prehandover install [--print] <harness>\n\nsupported: claude")
 		return 2
 	}
 	switch rest[0] {
 	case "claude":
-		return installClaude(*printOnly)
+		return installClaudeAt(filepath.Join(".claude", "settings.json"), *printOnly)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown harness: %q (supported: claude)\n", rest[0])
 		return 2
 	}
 }
 
-func installClaude(printOnly bool) int {
-	path := filepath.Join(".claude", "settings.json")
-
+func installClaudeAt(path string, printOnly bool) int {
 	settings, err := readJSONMap(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	hooks, _ := settings["hooks"].(map[string]any)
-	if hooks == nil {
-		hooks = map[string]any{}
-		settings["hooks"] = hooks
-	}
-
-	stop, _ := hooks["Stop"].([]any)
-	if hasPrehandoverHook(stop) {
-		fmt.Printf("already installed in %s\n", path)
-		return 0
-	}
-
-	entry := map[string]any{
-		"matcher": "",
-		"hooks": []any{
-			map[string]any{
-				"type":    "command",
-				"command": prehandoverCmd,
-			},
-		},
-	}
-	hooks["Stop"] = append(stop, entry)
+	changed := mergeClaudeStopHook(settings)
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -74,7 +51,10 @@ func installClaude(printOnly bool) int {
 		fmt.Println(string(out))
 		return 0
 	}
-
+	if !changed {
+		fmt.Printf("already installed in %s\n", path)
+		return 0
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -85,6 +65,31 @@ func installClaude(printOnly bool) int {
 	}
 	fmt.Printf("installed Stop hook in %s\n", path)
 	return 0
+}
+
+// mergeClaudeStopHook adds prehandover's Stop hook to the settings map.
+// Returns true if a change was made, false if it was already present.
+func mergeClaudeStopHook(settings map[string]any) bool {
+	hooks, _ := settings["hooks"].(map[string]any)
+	if hooks == nil {
+		hooks = map[string]any{}
+		settings["hooks"] = hooks
+	}
+	stop, _ := hooks["Stop"].([]any)
+	if hasPrehandoverHook(stop) {
+		return false
+	}
+	entry := map[string]any{
+		"matcher": "",
+		"hooks": []any{
+			map[string]any{
+				"type":    "command",
+				"command": prehandoverCmd,
+			},
+		},
+	}
+	hooks["Stop"] = append(stop, entry)
+	return true
 }
 
 func readJSONMap(path string) (map[string]any, error) {
