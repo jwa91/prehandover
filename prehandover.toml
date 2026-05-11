@@ -1,0 +1,29 @@
+#:schema https://prehandover.dev/schema.json
+# prehandover — self-hosted on this repo
+
+budget = "8s"
+parallelism = "auto"
+on_unchanged = "skip"
+fail_fast = false
+
+exclude = { glob = [".git/**", "prehandover", "dist/**"] }
+
+[[checks]]
+id = "gofmt"
+entry = "./scripts/gofmt-strict.sh"
+files = { glob = "**/*.go" }
+budget = "1s"
+
+[[checks]]
+id = "vet"
+entry = "go vet ./..."
+files = { glob = "**/*.go" }
+pass_filenames = false
+budget = "5s"
+
+[[checks]]
+id = "build"
+entry = "go build ./..."
+files = { glob = "**/*.go" }
+pass_filenames = false
+budget = "5s"
