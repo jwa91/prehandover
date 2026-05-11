@@ -23,21 +23,12 @@ prehandover run            # runs the checks
 
 Wire it into Claude Code:
 
-```json
-// .claude/settings.json
-{
-  "hooks": {
-    "Stop": [
-      { "matcher": "", "hooks": [{
-        "type": "command",
-        "command": "prehandover run --format=claude"
-      }]}
-    ]
-  }
-}
+```sh
+prehandover install claude       # merges into .claude/settings.json (idempotent)
+prehandover install --print claude   # dry-run
 ```
 
-When a check fails, Claude Code sees `{"decision":"block","reason":"..."}` and the agent is prompted to fix before stopping.
+The hook calls `prehandover run --format=claude` on Stop. When a check fails, Claude Code sees `{"decision":"block","reason":"..."}` and the agent is prompted to fix before stopping.
 
 ## Config
 
@@ -87,6 +78,17 @@ Exit codes: `0` pass, `1` fail, `2` config error, `3` budget exceeded with no fa
 
 `git diff --name-only HEAD` ∪ `git ls-files --others --exclude-standard`. Falls back to `git ls-files` on a fresh repo with no HEAD. If you're not in a git repo, every check runs as if `always_run = true`.
 
+## Scope
+
+prehandover sits at the **agent-to-human handover boundary** — the moment the agent stops and hands control back. That's the gap that current tooling doesn't fill.
+
+It is **not**:
+
+- a replacement for pre-commit / [prek](https://prek.j178.dev) — those already cover the commit boundary well.
+- a replacement for CI — that already covers the PR / submit boundary well.
+
+Higher-level loops have hooks that are perfectly fine. prehandover only addresses the lower-level loop that doesn't.
+
 ## Status
 
-Early. The `on-stop` phase is the only one implemented. Adding more phases (`on-edit`, `on-commit`, `on-submit`) is the obvious next move; probabilistic checks with precision tracking come after.
+Early. `on-stop` works and self-hosts. Next obvious move is `on-edit` for sub-second feedback mid-turn. Probabilistic checks with precision tracking come after.

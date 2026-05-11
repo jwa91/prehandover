@@ -43,6 +43,7 @@ Usage:
   prehandover run [--format=human|json|claude] [--config=prehandover.toml]
   prehandover init [--path=prehandover.toml] [--force]
   prehandover validate [--config=prehandover.toml]
+  prehandover install [--print] <harness>    (supported: claude)
 
 Run prehandover from the repo root; it reads prehandover.toml by default.
 Exit codes: 0 pass, 1 fail, 2 config error, 3 budget exceeded with no fails.`)
@@ -60,6 +61,8 @@ func main() {
 		os.Exit(cmdInit(os.Args[2:]))
 	case "validate":
 		os.Exit(cmdValidate(os.Args[2:]))
+	case "install":
+		os.Exit(cmdInstall(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
