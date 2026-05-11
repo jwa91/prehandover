@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jwa/prehandover/internal/config"
-	"github.com/jwa/prehandover/internal/filter"
+	"github.com/jwa91/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/filter"
 )
 
 type Status string

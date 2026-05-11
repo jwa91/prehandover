@@ -3,7 +3,7 @@ package filter
 import (
 	"testing"
 
-	"github.com/jwa/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/config"
 )
 
 func TestMatch(t *testing.T) {

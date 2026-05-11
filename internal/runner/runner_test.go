@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jwa/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/config"
 )
 
 func dur(d time.Duration) config.Duration { return config.Duration{Duration: d} }

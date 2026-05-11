@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jwa/prehandover/internal/changeset"
-	"github.com/jwa/prehandover/internal/config"
-	"github.com/jwa/prehandover/internal/report"
-	"github.com/jwa/prehandover/internal/runner"
+	"github.com/jwa91/prehandover/internal/changeset"
+	"github.com/jwa91/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/report"
+	"github.com/jwa91/prehandover/internal/runner"
 )
 
-const sampleConfig = `#:schema https://prehandover.dev/schema.json
+const sampleConfig = `#:schema ./schema.json
 # prehandover — unified hook for agent-to-human handovers
 
 budget = "5s"

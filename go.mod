@@ -1,4 +1,4 @@
-module github.com/jwa/prehandover
+module github.com/jwa91/prehandover
 
 go 1.26.3
 

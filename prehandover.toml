@@ -1,4 +1,4 @@
-#:schema https://prehandover.dev/schema.json
+#:schema ./schema.json
 # prehandover — self-hosted on this repo
 
 budget = "8s"

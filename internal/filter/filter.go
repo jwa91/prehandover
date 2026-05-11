@@ -6,7 +6,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/jwa/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/config"
 )
 
 type Matcher struct {
