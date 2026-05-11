@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://prehandover.local/schema.json",
   "title": "prehandover.toml",
-  "description": "Configuration for prehandover — the unified hook for agent-to-human handovers. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once Claude/Codex/Cursor adapters land and the repo goes public.",
+  "description": "Configuration for prehandover — the unified hook for agent-to-human handovers. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once the repo goes public.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

@@ -92,12 +92,12 @@ func TestMergeClaudeStopHook_EmittedCommandShape(t *testing.T) {
 	if hook["type"] != "command" {
 		t.Errorf("type = %v, want command", hook["type"])
 	}
-	if hook["command"] != prehandoverCmd {
-		t.Errorf("command = %v, want %s", hook["command"], prehandoverCmd)
+	if hook["command"] != claudeHandoverCmd {
+		t.Errorf("command = %v, want %s", hook["command"], claudeHandoverCmd)
 	}
 }
 
-func TestHasPrehandoverHook(t *testing.T) {
+func TestHasNestedCommand(t *testing.T) {
 	cases := []struct {
 		name string
 		stop []any
@@ -109,16 +109,16 @@ func TestHasPrehandoverHook(t *testing.T) {
 				map[string]any{"type": "command", "command": "echo hi"},
 			}},
 		}, false},
-		{"prehandover_on_path", []any{
+		{"matching_command", []any{
 			map[string]any{"hooks": []any{
-				map[string]any{"type": "command", "command": "prehandover run --format=claude"},
+				map[string]any{"type": "command", "command": claudeHandoverCmd},
 			}},
 		}, true},
-		{"prehandover_full_path", []any{
+		{"old_command_does_not_match", []any{
 			map[string]any{"hooks": []any{
 				map[string]any{"type": "command", "command": "/opt/homebrew/bin/prehandover run"},
 			}},
-		}, true},
+		}, false},
 		{"command_just_mentions_prehandover", []any{
 			map[string]any{"hooks": []any{
 				map[string]any{"type": "command", "command": "echo prehandover"},
@@ -127,7 +127,7 @@ func TestHasPrehandoverHook(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := hasPrehandoverHook(tc.stop)
+			got := hasNestedCommand(tc.stop, claudeHandoverCmd)
 			if got != tc.want {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -147,7 +147,7 @@ func TestInstallClaudeAt_CreatesFileAndDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !strings.Contains(string(data), prehandoverCmd) {
+	if !strings.Contains(string(data), claudeHandoverCmd) {
 		t.Errorf("file does not contain hook command:\n%s", data)
 	}
 	var settings map[string]any
@@ -200,6 +200,141 @@ func TestInstallClaudeAt_TwiceIsIdempotent(t *testing.T) {
 	}
 	first, _ := os.ReadFile(target)
 	if rc := installClaudeAt(target, false); rc != 0 {
+		t.Fatalf("second install rc = %d", rc)
+	}
+	second, _ := os.ReadFile(target)
+	if string(first) != string(second) {
+		t.Errorf("second install changed the file:\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+}
+
+func TestMergeCodexStopHook_EmittedCommandShape(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCodexStopHook(settings) {
+		t.Fatal("expected change=true")
+	}
+	stop := settings["hooks"].(map[string]any)["Stop"].([]any)
+	hooks := stop[0].(map[string]any)["hooks"].([]any)
+	hook := hooks[0].(map[string]any)
+	if hook["type"] != "command" {
+		t.Errorf("type = %v, want command", hook["type"])
+	}
+	if hook["command"] != codexHandoverCmd {
+		t.Errorf("command = %v, want %s", hook["command"], codexHandoverCmd)
+	}
+}
+
+func TestMergeCodexStopHook_Idempotent(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCodexStopHook(settings) {
+		t.Fatal("first call should mutate")
+	}
+	if mergeCodexStopHook(settings) {
+		t.Fatal("second call should be no-op")
+	}
+	stop := settings["hooks"].(map[string]any)["Stop"].([]any)
+	if len(stop) != 1 {
+		t.Fatalf("expected 1 Stop entry, got %d", len(stop))
+	}
+}
+
+func TestMergeCursorStopHook_EmittedCommandShape(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCursorStopHook(settings) {
+		t.Fatal("expected change=true")
+	}
+	if settings["version"] != float64(1) {
+		t.Fatalf("version = %v, want 1", settings["version"])
+	}
+	stop := settings["hooks"].(map[string]any)["stop"].([]any)
+	hook := stop[0].(map[string]any)
+	if hook["command"] != cursorHandoverCmd {
+		t.Errorf("command = %v, want %s", hook["command"], cursorHandoverCmd)
+	}
+	if _, ok := hook["loop_limit"]; !ok {
+		t.Error("loop_limit key missing")
+	}
+	if hook["loop_limit"] != nil {
+		t.Errorf("loop_limit = %v, want nil", hook["loop_limit"])
+	}
+}
+
+func TestMergeCursorStopHook_Idempotent(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCursorStopHook(settings) {
+		t.Fatal("first call should mutate")
+	}
+	if mergeCursorStopHook(settings) {
+		t.Fatal("second call should be no-op")
+	}
+	stop := settings["hooks"].(map[string]any)["stop"].([]any)
+	if len(stop) != 1 {
+		t.Fatalf("expected 1 stop entry, got %d", len(stop))
+	}
+}
+
+func TestEnsureCodexHooksFeature_AddsSection(t *testing.T) {
+	got, changed := ensureCodexHooksFeature("model = \"gpt\"\n")
+	if !changed {
+		t.Fatal("expected change=true")
+	}
+	if !strings.Contains(got, "[features]\ncodex_hooks = true\n") {
+		t.Fatalf("missing features block:\n%s", got)
+	}
+	if !strings.Contains(got, "model = \"gpt\"") {
+		t.Fatalf("lost existing setting:\n%s", got)
+	}
+}
+
+func TestEnsureCodexHooksFeature_UpdatesExistingFalse(t *testing.T) {
+	got, changed := ensureCodexHooksFeature("[features]\ncodex_hooks = false\n")
+	if !changed {
+		t.Fatal("expected change=true")
+	}
+	if got != "[features]\ncodex_hooks = true\n" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
+func TestEnsureCodexHooksFeature_Idempotent(t *testing.T) {
+	got, changed := ensureCodexHooksFeature("[features]\ncodex_hooks = true\n")
+	if changed {
+		t.Fatal("expected no change")
+	}
+	if got != "[features]\ncodex_hooks = true\n" {
+		t.Fatalf("got:\n%s", got)
+	}
+}
+
+func TestInstallCodexAt_TwiceIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	hooksPath := filepath.Join(dir, ".codex", "hooks.json")
+	configPath := filepath.Join(dir, ".codex", "config.toml")
+	if rc := installCodexAt(hooksPath, configPath, false); rc != 0 {
+		t.Fatalf("first install rc = %d", rc)
+	}
+	firstHooks, _ := os.ReadFile(hooksPath)
+	firstConfig, _ := os.ReadFile(configPath)
+	if rc := installCodexAt(hooksPath, configPath, false); rc != 0 {
+		t.Fatalf("second install rc = %d", rc)
+	}
+	secondHooks, _ := os.ReadFile(hooksPath)
+	secondConfig, _ := os.ReadFile(configPath)
+	if string(firstHooks) != string(secondHooks) {
+		t.Errorf("hooks changed on second install")
+	}
+	if string(firstConfig) != string(secondConfig) {
+		t.Errorf("config changed on second install")
+	}
+}
+
+func TestInstallCursorAt_TwiceIsIdempotent(t *testing.T) {
+	target := filepath.Join(t.TempDir(), ".cursor", "hooks.json")
+	if rc := installCursorAt(target, false); rc != 0 {
+		t.Fatalf("first install rc = %d", rc)
+	}
+	first, _ := os.ReadFile(target)
+	if rc := installCursorAt(target, false); rc != 0 {
 		t.Fatalf("second install rc = %d", rc)
 	}
 	second, _ := os.ReadFile(target)

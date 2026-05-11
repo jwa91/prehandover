@@ -77,36 +77,3 @@ func JSON(w io.Writer, r *runner.Run) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
 }
-
-// Claude emits the Stop hook decision shape Claude Code expects.
-// Returns no output (= no block) when all checks pass.
-func Claude(w io.Writer, r *runner.Run) error {
-	if r.Status == runner.StatusPass {
-		return nil
-	}
-	var b strings.Builder
-	for _, res := range r.Results {
-		if res.Status == runner.StatusPass || res.Status == runner.StatusSkip {
-			continue
-		}
-		fmt.Fprintf(&b, "[%s] %s", res.ID, res.Status)
-		if res.Reason != "" {
-			fmt.Fprintf(&b, " — %s", res.Reason)
-		}
-		b.WriteString("\n")
-		if res.Output != "" {
-			b.WriteString(res.Output)
-			if !strings.HasSuffix(res.Output, "\n") {
-				b.WriteString("\n")
-			}
-		}
-		b.WriteString("\n")
-	}
-	out := map[string]any{
-		"decision": "block",
-		"reason":   strings.TrimRight(b.String(), "\n"),
-	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(out)
-}

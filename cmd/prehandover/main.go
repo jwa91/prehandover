@@ -4,10 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/jwa91/prehandover/internal/changeset"
 	"github.com/jwa91/prehandover/internal/config"
+	"github.com/jwa91/prehandover/internal/lifecycle"
 	"github.com/jwa91/prehandover/internal/report"
 	"github.com/jwa91/prehandover/internal/runner"
 )
@@ -40,10 +43,11 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `prehandover — unified hook for agent-to-human handovers
 
 Usage:
-  prehandover run [--format=human|json|claude] [--config=prehandover.toml]
+  prehandover run [--format=human|json] [--config=prehandover.toml]
+  prehandover hook <harness> [moment] [--config=prehandover.toml]
   prehandover init [--path=prehandover.toml] [--force]
   prehandover validate [--config=prehandover.toml]
-  prehandover install [--print] <harness>    (supported: claude)
+  prehandover install [--print] <harness>    (supported: claude, codex, cursor)
 
 Run prehandover from the repo root; it reads prehandover.toml by default.
 Exit codes: 0 pass, 1 fail, 2 config error, 3 budget exceeded with no fails.`)
@@ -57,6 +61,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		os.Exit(cmdRun(os.Args[2:]))
+	case "hook":
+		os.Exit(cmdHook(os.Args[2:]))
 	case "init":
 		os.Exit(cmdInit(os.Args[2:]))
 	case "validate":
@@ -75,7 +81,7 @@ func main() {
 
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	format := fs.String("format", "human", "output format: human|json|claude")
+	format := fs.String("format", "human", "output format: human|json")
 	cfgPath := fs.String("config", "prehandover.toml", "config file path")
 	fs.Parse(args)
 
@@ -103,11 +109,6 @@ func cmdRun(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-	case "claude":
-		if err := report.Claude(os.Stdout, run); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 2
-		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown format: %s\n", *format)
 		return 2
@@ -121,6 +122,104 @@ func cmdRun(args []string) int {
 	default:
 		return 1
 	}
+}
+
+func cmdHook(args []string) int {
+	parsed, err := parseHookArgs(args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, "usage: prehandover hook <harness> [moment] [--config=prehandover.toml]")
+		return 2
+	}
+	adapter, ok := lifecycle.ForHarness(parsed.harness)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unsupported harness: %s\n", parsed.harness)
+		return 2
+	}
+	if !adapter.Supports(parsed.moment) {
+		fmt.Fprintf(os.Stderr, "unsupported moment %q for harness %s\n", parsed.moment, adapter.Name())
+		return 2
+	}
+
+	input, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	inv, err := adapter.Decode(parsed.moment, input)
+	if err != nil {
+		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover could not parse hook input: %v", err))
+	}
+	if inv.CWD != "" {
+		if err := os.Chdir(inv.CWD); err != nil {
+			return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover could not use hook cwd %q: %v", inv.CWD, err))
+		}
+	}
+
+	cfg, err := config.Load(parsed.configPath)
+	if err != nil {
+		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover configuration error: %v", err))
+	}
+	changed, err := changeset.Changed(".")
+	if err != nil {
+		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover changeset error: %v", err))
+	}
+	run, err := runner.Execute(context.Background(), cfg, changed)
+	if err != nil {
+		return encodeHookFailure(adapter, parsed.moment, fmt.Sprintf("prehandover execution error: %v", err))
+	}
+	if err := adapter.Encode(parsed.moment, lifecycle.OutcomeFromRun(run), os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	return 0
+}
+
+type hookArgs struct {
+	harness    string
+	moment     lifecycle.Moment
+	configPath string
+}
+
+func parseHookArgs(args []string) (hookArgs, error) {
+	out := hookArgs{
+		moment:     lifecycle.MomentHandover,
+		configPath: "prehandover.toml",
+	}
+	var positional []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--config" || arg == "-config":
+			i++
+			if i >= len(args) {
+				return out, fmt.Errorf("%s requires a value", arg)
+			}
+			out.configPath = args[i]
+		case strings.HasPrefix(arg, "--config="):
+			out.configPath = strings.TrimPrefix(arg, "--config=")
+		case strings.HasPrefix(arg, "-config="):
+			out.configPath = strings.TrimPrefix(arg, "-config=")
+		default:
+			positional = append(positional, arg)
+		}
+	}
+	if len(positional) < 1 || len(positional) > 2 {
+		return out, fmt.Errorf("expected harness and optional moment")
+	}
+	out.harness = positional[0]
+	if len(positional) == 2 {
+		out.moment = lifecycle.Moment(positional[1])
+	}
+	return out, nil
+}
+
+func encodeHookFailure(adapter lifecycle.Adapter, moment lifecycle.Moment, message string) int {
+	if err := adapter.Encode(moment, lifecycle.FailureOutcome(message), os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	return 0
 }
 
 func cmdInit(args []string) int {

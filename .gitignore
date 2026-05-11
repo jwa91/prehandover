@@ -3,3 +3,6 @@
 *.test
 *.out
 .DS_Store
+
+# Local scratch space — harness docs, notes, anything not meant to ship
+/scratch/

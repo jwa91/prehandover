@@ -4,7 +4,7 @@ The unified hook for agent-to-human handovers.
 
 Pre-commit and CI run at *commit* and *PR* boundaries. But an agent session crosses dozens of edit→test→edit cycles inside a single commit, and the quality contract for those micro-cycles is currently configured *per agent harness* — Claude Code hooks, Codex config, Cursor rules — instead of *per codebase*.
 
-prehandover is one config in your repo that every harness can call at the agent-stop boundary. Same checks, same budget, same output shape, no matter which agent made the edit.
+prehandover is one config in your repo that every harness can call at the agent-stop boundary. Same checks and same budget, with harness-specific hook responses handled by adapters.
 
 ## Install
 
@@ -28,7 +28,14 @@ prehandover install claude       # merges into .claude/settings.json (idempotent
 prehandover install --print claude   # dry-run
 ```
 
-The hook calls `prehandover run --format=claude` on Stop. When a check fails, Claude Code sees `{"decision":"block","reason":"..."}` and the agent is prompted to fix before stopping.
+Or wire it into another supported harness:
+
+```sh
+prehandover install codex        # writes .codex/hooks.json and enables codex_hooks
+prehandover install cursor       # writes .cursor/hooks.json
+```
+
+The installed hook calls `prehandover hook <harness> handover` at the agent-stop boundary. When a check fails, the adapter emits the harness-specific continuation response and the agent is prompted to fix before stopping.
 
 ## Config
 
@@ -70,9 +77,22 @@ budget = "200ms"
 |---|---|
 | `human` | terminal (default) |
 | `json` | downstream tooling |
-| `claude` | Claude Code Stop hook — emits `{decision, reason}` |
 
 Exit codes: `0` pass, `1` fail, `2` config error, `3` budget exceeded with no fails.
+
+## Hook adapters
+
+`prehandover` names semantic agent-loop boundaries **moments**. The only implemented moment is currently `handover`, which means "the agent is about to hand control back to the human." Harness adapters map that moment onto each product's hook names and response schema.
+
+Supported handover adapters:
+
+| Harness | Installed event | Failure response |
+|---|---|---|
+| Claude Code | `Stop` | `{"decision":"block","reason":"..."}` |
+| Codex | `Stop` | `{"decision":"block","reason":"..."}` |
+| Cursor | `stop` | `{"followup_message":"..."}` |
+
+Reserved future moments: `session_context`, `prompt_ingress`, `tool_preflight`, `tool_result`, `worker_handover`, `context_compaction`, and `session_end`. Not every harness exposes every moment, so future adapters should advertise capabilities instead of pretending the lifecycle is uniform everywhere.
 
 ## Changeset detection
 
@@ -91,7 +111,7 @@ Higher-level loops have hooks that are perfectly fine. prehandover only addresse
 
 ## Status
 
-Early. `on-stop` works and self-hosts. Currently supports Claude Code. Codex / Cursor / Pi / Amp adapters are on the roadmap. Repo is private until coverage is broader.
+Early. `handover` works and self-hosts. Currently supports Claude Code, Codex, and Cursor. Pi / Amp / opencode adapters are on the roadmap when usable handover hooks exist.
 
 ## Credits
 
