@@ -91,4 +91,12 @@ Higher-level loops have hooks that are perfectly fine. prehandover only addresse
 
 ## Status
 
-Early. `on-stop` works and self-hosts. Next obvious move is `on-edit` for sub-second feedback mid-turn. Probabilistic checks with precision tracking come after.
+Early. `on-stop` works and self-hosts. Currently supports Claude Code. Codex / Cursor / Pi / Amp adapters are on the roadmap. Repo is private until coverage is broader.
+
+## Credits
+
+The `prehandover.toml` field surface — `id`, `entry`, `args`, `files`, `exclude`, `pass_filenames`, `env`, `priority`, the `{glob = "..."}` extension, and TOML shape — is borrowed from [**prek**](https://prek.j178.dev) (MIT-licensed by [@j178](https://github.com/j178)). prek is the Rust rewrite of pre-commit and is what I use as my commit-time hook manager; prehandover deliberately reuses its vocabulary so the two configs feel like siblings.
+
+## License
+
+[MIT](LICENSE).

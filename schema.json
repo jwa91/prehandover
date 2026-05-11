@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prehandover.local/schema.json",
+  "title": "prehandover.toml",
+  "description": "Configuration for prehandover — the unified hook for agent-to-human handovers. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once Claude/Codex/Cursor adapters land and the repo goes public.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "budget": {
+      "$ref": "#/$defs/duration",
+      "description": "Total wall-clock budget for the whole run."
+    },
+    "parallelism": {
+      "description": "\"auto\" (default, uses CPU count) or a stringified integer.",
+      "type": "string",
+      "default": "auto"
+    },
+    "on_unchanged": {
+      "description": "What to do for a check whose files glob doesn't intersect the changeset.",
+      "enum": ["skip", "run"],
+      "default": "skip"
+    },
+    "fail_fast": {
+      "description": "Stop running serial checks after the first failure.",
+      "type": "boolean",
+      "default": false
+    },
+    "files": { "$ref": "#/$defs/pattern" },
+    "exclude": { "$ref": "#/$defs/pattern" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "minimum_prehandover_version": {
+      "description": "Require a minimum prehandover version, e.g. \"0.2.0\".",
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "duration": {
+      "description": "Go duration string, e.g. \"500ms\", \"3s\", \"1m\".",
+      "type": "string",
+      "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+    },
+    "pattern": {
+      "description": "Regex string, or an inline table {glob = \"...\"} / {glob = [...]} / {regex = \"...\"}.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "glob": {
+              "oneOf": [
+                { "type": "string" },
+                { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+              ]
+            },
+            "regex": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "passFilenames": {
+      "description": "Pass changed filenames to entry as positional args. Bool, or an int to cap files-per-invocation. Defaults to true when absent.",
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "integer", "minimum": 1 }
+      ]
+    },
+    "check": {
+      "type": "object",
+      "required": ["id", "entry"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Command to run. Whitespace-split unless `shell` is set."
+        },
+        "args": { "type": "array", "items": { "type": "string" } },
+        "files": { "$ref": "#/$defs/pattern" },
+        "exclude": { "$ref": "#/$defs/pattern" },
+        "pass_filenames": { "$ref": "#/$defs/passFilenames" },
+        "always_run": { "type": "boolean", "default": false },
+        "require_serial": { "type": "boolean", "default": false },
+        "verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show output even on pass."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Lower priority runs first.",
+          "default": 0
+        },
+        "budget": {
+          "$ref": "#/$defs/duration",
+          "description": "Per-check budget; inherits global budget if absent."
+        },
+        "description": { "type": "string" },
+        "shell": {
+          "enum": ["sh", "bash"],
+          "description": "When set, entry is run via <shell> -c. Lets you use pipes, redirects, &&."
+        }
+      }
+    }
+  }
+}
