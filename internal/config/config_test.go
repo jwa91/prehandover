@@ -1,0 +1,155 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func write(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	p := filepath.Join(dir, "prehandover.toml")
+	if err := os.WriteFile(p, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestLoad_Defaults(t *testing.T) {
+	p := write(t, `
+[[checks]]
+id = "x"
+entry = "true"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Budget.Duration != 5*time.Second {
+		t.Errorf("default budget = %s, want 5s", cfg.Budget.Duration)
+	}
+	if cfg.OnUnchanged != "skip" {
+		t.Errorf("default on_unchanged = %q, want skip", cfg.OnUnchanged)
+	}
+	if cfg.Parallelism != "auto" {
+		t.Errorf("default parallelism = %q, want auto", cfg.Parallelism)
+	}
+	if cfg.Checks[0].Budget.Duration != 5*time.Second {
+		t.Errorf("check budget should inherit global, got %s", cfg.Checks[0].Budget.Duration)
+	}
+}
+
+func TestLoad_PatternShapes(t *testing.T) {
+	p := write(t, `
+[[checks]]
+id = "a"
+entry = "true"
+files = "\\.go$"
+
+[[checks]]
+id = "b"
+entry = "true"
+files = { glob = "**/*.ts" }
+
+[[checks]]
+id = "c"
+entry = "true"
+files = { glob = ["**/*.ts", "**/*.tsx"] }
+
+[[checks]]
+id = "d"
+entry = "true"
+exclude = { regex = "vendor/" }
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Checks[0].Files.Regex != "\\.go$" {
+		t.Errorf("check[0] regex = %q", cfg.Checks[0].Files.Regex)
+	}
+	if got := cfg.Checks[1].Files.Globs; len(got) != 1 || got[0] != "**/*.ts" {
+		t.Errorf("check[1] globs = %v", got)
+	}
+	if got := cfg.Checks[2].Files.Globs; len(got) != 2 {
+		t.Errorf("check[2] globs = %v", got)
+	}
+	if cfg.Checks[3].Exclude.Regex != "vendor/" {
+		t.Errorf("check[3] exclude regex = %q", cfg.Checks[3].Exclude.Regex)
+	}
+}
+
+func TestLoad_PassFilenames(t *testing.T) {
+	p := write(t, `
+[[checks]]
+id = "default"
+entry = "true"
+
+[[checks]]
+id = "explicit_false"
+entry = "true"
+pass_filenames = false
+
+[[checks]]
+id = "explicit_true"
+entry = "true"
+pass_filenames = true
+
+[[checks]]
+id = "limit"
+entry = "true"
+pass_filenames = 5
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		idx  int
+		want bool
+	}{
+		{0, true},  // default
+		{1, false}, // explicit false
+		{2, true},  // explicit true
+		{3, true},  // int → enabled
+	}
+	for _, c := range cases {
+		got := cfg.Checks[c.idx].PassFilenames.Effective()
+		if got != c.want {
+			t.Errorf("check[%d] effective pass_filenames = %v, want %v", c.idx, got, c.want)
+		}
+	}
+	if cfg.Checks[3].PassFilenames.Limit != 5 {
+		t.Errorf("check[3] limit = %d, want 5", cfg.Checks[3].PassFilenames.Limit)
+	}
+}
+
+func TestLoad_BudgetParsing(t *testing.T) {
+	p := write(t, `
+budget = "10s"
+
+[[checks]]
+id = "fast"
+entry = "true"
+budget = "250ms"
+`)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Budget.Duration != 10*time.Second {
+		t.Errorf("global budget = %s", cfg.Budget.Duration)
+	}
+	if cfg.Checks[0].Budget.Duration != 250*time.Millisecond {
+		t.Errorf("check budget = %s", cfg.Checks[0].Budget.Duration)
+	}
+}
+
+func TestLoad_InvalidDuration(t *testing.T) {
+	p := write(t, `budget = "not-a-duration"`)
+	if _, err := Load(p); err == nil {
+		t.Error("expected error on bad duration")
+	}
+}
