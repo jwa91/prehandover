@@ -1,0 +1,10 @@
+# Default ownership for the whole repository.
+* @jwa91
+
+# Treat automation and release plumbing as especially sensitive.
+/.github/ @jwa91
+/scripts/ @jwa91
+/Makefile @jwa91
+/go.mod @jwa91
+/go.sum @jwa91
+
