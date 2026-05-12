@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -70,23 +71,36 @@ func (p *Pattern) UnmarshalTOML(v interface{}) error {
 	case string:
 		p.Regex = x
 	case map[string]interface{}:
+		for k := range x {
+			if k != "glob" && k != "regex" {
+				return fmt.Errorf("pattern: unknown key %q (want \"glob\" or \"regex\")", k)
+			}
+		}
 		if g, ok := x["glob"]; ok {
 			switch gv := g.(type) {
 			case string:
 				p.Globs = []string{gv}
 			case []interface{}:
-				for _, item := range gv {
-					if s, ok := item.(string); ok {
-						p.Globs = append(p.Globs, s)
+				for i, item := range gv {
+					s, ok := item.(string)
+					if !ok {
+						return fmt.Errorf("pattern: glob[%d] must be string, got %T", i, item)
 					}
+					p.Globs = append(p.Globs, s)
 				}
+			default:
+				return fmt.Errorf("pattern: glob must be string or array of strings, got %T", g)
 			}
 		}
 		if r, ok := x["regex"]; ok {
-			if s, ok := r.(string); ok {
-				p.Regex = s
+			s, ok := r.(string)
+			if !ok {
+				return fmt.Errorf("pattern: regex must be string, got %T", r)
 			}
+			p.Regex = s
 		}
+	default:
+		return fmt.Errorf("pattern: must be string or inline table, got %T", v)
 	}
 	return nil
 }
@@ -105,8 +119,13 @@ func (p *PassFilenames) UnmarshalTOML(v interface{}) error {
 	case bool:
 		p.Enabled = x
 	case int64:
+		if x < 0 {
+			return fmt.Errorf("pass_filenames: limit must be non-negative, got %d", x)
+		}
 		p.Enabled = true
 		p.Limit = int(x)
+	default:
+		return fmt.Errorf("pass_filenames: must be bool or non-negative int, got %T", v)
 	}
 	return nil
 }
@@ -145,6 +164,12 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Parallelism == "" {
 		cfg.Parallelism = "auto"
+	}
+	if cfg.Parallelism != "auto" {
+		n, err := strconv.Atoi(cfg.Parallelism)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("parse %s: parallelism must be \"auto\" or a positive integer, got %q", path, cfg.Parallelism)
+		}
 	}
 	if cfg.OnUnchanged == "" {
 		cfg.OnUnchanged = "skip"

@@ -175,6 +175,237 @@ entry = "true"
 	}
 }
 
+func TestLoad_InvalidPatternShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "pattern as int",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = 5
+`,
+		},
+		{
+			name: "pattern as bool",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = true
+`,
+		},
+		{
+			name: "glob as int",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = { glob = 7 }
+`,
+		},
+		{
+			name: "glob list with non-string element",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = { glob = ["**/*.ts", 3] }
+`,
+		},
+		{
+			name: "regex as int",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = { regex = 9 }
+`,
+		},
+		{
+			name: "unknown pattern key",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+files = { pattern = "**/*.go" }
+`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := write(t, tc.body)
+			if _, err := Load(p); err == nil {
+				t.Errorf("expected error for invalid pattern shape")
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidPassFilenamesShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "string value",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+pass_filenames = "yes"
+`,
+		},
+		{
+			name: "negative int",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+pass_filenames = -1
+`,
+		},
+		{
+			name: "table value",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+pass_filenames = { limit = 5 }
+`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := write(t, tc.body)
+			if _, err := Load(p); err == nil {
+				t.Errorf("expected error for invalid pass_filenames shape")
+			}
+		})
+	}
+}
+
+func TestLoad_ParallelismValid(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "auto",
+			body: `
+parallelism = "auto"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+			want: "auto",
+		},
+		{
+			name: "positive int string",
+			body: `
+parallelism = "4"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+			want: "4",
+		},
+		{
+			name: "default when empty",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+`,
+			want: "auto",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := write(t, tc.body)
+			cfg, err := Load(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Parallelism != tc.want {
+				t.Errorf("parallelism = %q, want %q", cfg.Parallelism, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_ParallelismInvalid(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "non-numeric",
+			body: `
+parallelism = "many"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+		},
+		{
+			name: "zero",
+			body: `
+parallelism = "0"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+		},
+		{
+			name: "negative",
+			body: `
+parallelism = "-2"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+		},
+		{
+			name: "float string",
+			body: `
+parallelism = "1.5"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+		},
+		{
+			name: "mixed",
+			body: `
+parallelism = "4cores"
+
+[[checks]]
+id = "x"
+entry = "true"
+`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := write(t, tc.body)
+			if _, err := Load(p); err == nil {
+				t.Errorf("expected error for invalid parallelism")
+			}
+		})
+	}
+}
+
 func TestLoad_ManifestRequired(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "prehandover.toml")
