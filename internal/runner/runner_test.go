@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +184,26 @@ func TestExecute_ConfigError(t *testing.T) {
 	}
 }
 
+func TestCommandEnv_AugmentsSparseHookPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	env := commandEnv(map[string]string{"PATH": "/usr/bin:/bin"})
+	pathValue := envValue(env, "PATH")
+
+	wantParts := []string{
+		"/usr/bin",
+		"/bin",
+		filepath.Join(home, "go", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		"/opt/homebrew/bin",
+	}
+	for _, want := range wantParts {
+		if !pathContains(pathValue, want) {
+			t.Fatalf("PATH %q does not contain %q", pathValue, want)
+		}
+	}
+}
+
 func TestSplitEntry(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -209,4 +230,13 @@ func TestSplitEntry(t *testing.T) {
 			}
 		}
 	}
+}
+
+func pathContains(pathValue, want string) bool {
+	for _, part := range filepath.SplitList(pathValue) {
+		if part == want {
+			return true
+		}
+	}
+	return false
 }

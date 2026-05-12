@@ -2,14 +2,14 @@
 
 Unified validation for the moment an agent is about to stop.
 
-Pre-commit and CI run at *commit* and *PR* boundaries. But an agent session crosses dozens of edit→test→edit cycles inside a single commit, and the quality contract for those micro-cycles is currently configured *per agent harness* — Claude Code hooks, Codex config, Cursor rules — instead of *per codebase*.
+Pre-commit and CI run at _commit_ and _PR_ boundaries. But an agent session crosses dozens of edit→test→edit cycles inside a single commit, and the quality contract for those micro-cycles is currently configured _per agent harness_ — Claude Code hooks, Codex config, Cursor rules — instead of _per codebase_.
 
 prehandover is one config in your repo that every harness can call at the `agent_stop` boundary. Same checks and same budget, with harness-specific hook responses handled by adapters.
 
 ## Install
 
 ```sh
-go install github.com/jwa/prehandover/cmd/prehandover@latest
+go install github.com/jwa91/prehandover/cmd/prehandover@latest
 ```
 
 ## Quickstart
@@ -21,6 +21,22 @@ prehandover validate       # parses + reports
 prehandover doctor         # verifies manifest and installed harness adapters
 prehandover run            # runs the checks
 ```
+
+## Development
+
+This repo keeps project-specific Go tools pinned in `go.mod` and system-level
+CLI tools in the dotfiles `Brewfile`.
+
+```sh
+make install     # install current checkout to GOPATH/bin for local hooks
+make check       # fmt, vet, staticcheck, govulncheck, build, tests
+make lint        # golangci-lint
+make race        # race detector
+```
+
+If a GUI reports `hook exited with code 127`, it could not find the
+`prehandover` binary. Run `make install` and make sure `$(go env GOPATH)/bin`
+is loaded by your shell startup files.
 
 Wire it into Claude Code:
 
@@ -87,10 +103,10 @@ budget = "200ms"
 
 ## Output formats
 
-| `--format=` | Use for |
-|---|---|
-| `human` | terminal (default) |
-| `json` | downstream tooling |
+| `--format=` | Use for            |
+| ----------- | ------------------ |
+| `human`     | terminal (default) |
+| `json`      | downstream tooling |
 
 Exit codes: `0` pass, `1` fail, `2` config error, `3` budget exceeded with no fails.
 
@@ -100,11 +116,11 @@ Exit codes: `0` pass, `1` fail, `2` config error, `3` budget exceeded with no fa
 
 Supported `agent_stop` adapters:
 
-| Harness | Installed event | Failure response |
-|---|---|---|
-| Claude Code | `Stop` | `{"decision":"block","reason":"..."}` |
-| Codex | `Stop` | `{"decision":"block","reason":"..."}` |
-| Cursor | `stop` | `{"followup_message":"..."}` |
+| Harness     | Installed event | Failure response                      |
+| ----------- | --------------- | ------------------------------------- |
+| Claude Code | `Stop`          | `{"decision":"block","reason":"..."}` |
+| Codex       | `Stop`          | `{"decision":"block","reason":"..."}` |
+| Cursor      | `stop`          | `{"followup_message":"..."}`          |
 
 Reserved future moments: `session_context`, `prompt_ingress`, `tool_preflight`, `tool_result`, `worker_stop`, `context_compaction`, and `session_end`. Not every harness exposes every moment, so future adapters should advertise capabilities instead of pretending the lifecycle is uniform everywhere.
 

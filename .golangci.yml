@@ -1,0 +1,29 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - errorlint
+    - nilerr
+    - copyloopvar
+    - durationcheck
+    - bodyclose
+    - misspell
+    - nolintlint
+
+  settings:
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+formatters:
+  enable:
+    - gofmt

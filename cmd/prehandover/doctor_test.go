@@ -36,18 +36,28 @@ func withChdir(t *testing.T, dir string) {
 	}
 }
 
+func writeFakePrehandover(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "prehandover")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestCmdDoctor_AllManifestAdaptersInstalled(t *testing.T) {
 	dir := t.TempDir()
 	withChdir(t, dir)
 	writeDoctorConfig(t, dir, `"claude", "codex", "cursor"`)
+	bin := writeFakePrehandover(t, dir)
 
-	if rc := installClaudeAt(filepath.Join(".claude", "settings.json"), false); rc != 0 {
+	if rc := installClaudeAt(filepath.Join(".claude", "settings.json"), false, agentStopCommand(bin, "claude")); rc != 0 {
 		t.Fatalf("install claude rc = %d", rc)
 	}
-	if rc := installCodexAt(filepath.Join(".codex", "hooks.json"), filepath.Join(".codex", "config.toml"), false); rc != 0 {
+	if rc := installCodexAt(filepath.Join(".codex", "hooks.json"), filepath.Join(".codex", "config.toml"), false, agentStopCommand(bin, "codex")); rc != 0 {
 		t.Fatalf("install codex rc = %d", rc)
 	}
-	if rc := installCursorAt(filepath.Join(".cursor", "hooks.json"), false); rc != 0 {
+	if rc := installCursorAt(filepath.Join(".cursor", "hooks.json"), false, agentStopCommand(bin, "cursor")); rc != 0 {
 		t.Fatalf("install cursor rc = %d", rc)
 	}
 
@@ -63,6 +73,20 @@ func TestCmdDoctor_FailsWhenManifestAdapterIsMissing(t *testing.T) {
 
 	if rc := cmdDoctor(nil); rc == 0 {
 		t.Fatal("doctor should fail when manifest adapter is not installed")
+	}
+}
+
+func TestCmdDoctor_FailsWhenHookCommandCannotExecute(t *testing.T) {
+	dir := t.TempDir()
+	withChdir(t, dir)
+	writeDoctorConfig(t, dir, `"codex"`)
+
+	missing := filepath.Join(dir, "missing", "prehandover")
+	if rc := installCodexAt(filepath.Join(".codex", "hooks.json"), filepath.Join(".codex", "config.toml"), false, agentStopCommand(missing, "codex")); rc != 0 {
+		t.Fatalf("install codex rc = %d", rc)
+	}
+	if rc := cmdDoctor(nil); rc == 0 {
+		t.Fatal("doctor should fail when the hook executable is missing")
 	}
 }
 

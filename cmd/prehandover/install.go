@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	prehandoverBinEnv  = "PREHANDOVER_BIN"
 	claudeAgentStopCmd = "prehandover hook claude agent_stop"
 	codexAgentStopCmd  = "prehandover hook codex agent_stop"
 	cursorAgentStopCmd = "prehandover hook cursor agent_stop"
@@ -27,27 +28,84 @@ func cmdInstall(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: prehandover install [--print] <harness>\n\nsupported: claude, codex, cursor")
 		return 2
 	}
-	switch rest[0] {
-	case "claude":
-		return installClaudeAt(filepath.Join(".claude", "settings.json"), *printOnly)
-	case "codex":
-		return installCodexAt(filepath.Join(".codex", "hooks.json"), filepath.Join(".codex", "config.toml"), *printOnly)
-	case "cursor":
-		return installCursorAt(filepath.Join(".cursor", "hooks.json"), *printOnly)
+	harness := rest[0]
+	switch harness {
+	case "claude", "codex", "cursor":
 	default:
-		fmt.Fprintf(os.Stderr, "unknown harness: %q (supported: claude, codex, cursor)\n", rest[0])
+		fmt.Fprintf(os.Stderr, "unknown harness: %q (supported: claude, codex, cursor)\n", harness)
 		return 2
 	}
+	command, err := installHookCommand(harness)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	switch harness {
+	case "claude":
+		return installClaudeAt(filepath.Join(".claude", "settings.json"), *printOnly, command)
+	case "codex":
+		return installCodexAt(filepath.Join(".codex", "hooks.json"), filepath.Join(".codex", "config.toml"), *printOnly, command)
+	case "cursor":
+		return installCursorAt(filepath.Join(".cursor", "hooks.json"), *printOnly, command)
+	}
+	return 2
 }
 
-func installClaudeAt(path string, printOnly bool) int {
+func installHookCommand(harness string) (string, error) {
+	if override := os.Getenv(prehandoverBinEnv); override != "" {
+		bin, err := checkedExecutable(override)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", prehandoverBinEnv, err)
+		}
+		return agentStopCommand(bin, harness), nil
+	}
+	return hookCommandOrDefault(harness, nil), nil
+}
+
+func checkedExecutable(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable %q: %w", path, err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable %q: %w", path, err)
+	}
+	if info.IsDir() || info.Mode()&0111 == 0 {
+		return "", fmt.Errorf("resolve executable %q: not an executable file", path)
+	}
+	return abs, nil
+}
+
+func agentStopCommand(binary, harness string) string {
+	return shellQuoteArg(binary) + " hook " + harness + " agent_stop"
+}
+
+func shellQuoteArg(arg string) string {
+	if arg == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(arg, " \t\n'\"\\$&;()[]{}*?!<>|`") {
+		return arg
+	}
+	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+}
+
+func hookCommandOrDefault(harness string, commands []string) string {
+	if len(commands) > 0 && commands[0] != "" {
+		return commands[0]
+	}
+	return "prehandover hook " + harness + " agent_stop"
+}
+
+func installClaudeAt(path string, printOnly bool, command ...string) int {
 	settings, err := readJSONMap(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	changed := mergeClaudeStopHook(settings)
+	changed := mergeClaudeStopHook(settings, command...)
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -78,22 +136,25 @@ func installClaudeAt(path string, printOnly bool) int {
 
 // mergeClaudeStopHook adds prehandover's agent_stop hook to the settings map.
 // Returns true if a change was made, false if it was already present.
-func mergeClaudeStopHook(settings map[string]any) bool {
+func mergeClaudeStopHook(settings map[string]any, command ...string) bool {
+	want := hookCommandOrDefault("claude", command)
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
 	stop, _ := hooks["Stop"].([]any)
-	if hasNestedCommand(stop, claudeAgentStopCmd) {
-		return false
+	normalized, found, changed := normalizeNestedStopHook(stop, "claude", want)
+	hooks["Stop"] = normalized
+	if found {
+		return changed
 	}
 	entry := map[string]any{
 		"matcher": "",
 		"hooks": []any{
 			map[string]any{
 				"type":    "command",
-				"command": claudeAgentStopCmd,
+				"command": want,
 			},
 		},
 	}
@@ -101,13 +162,13 @@ func mergeClaudeStopHook(settings map[string]any) bool {
 	return true
 }
 
-func installCodexAt(hooksPath, configPath string, printOnly bool) int {
+func installCodexAt(hooksPath, configPath string, printOnly bool, command ...string) int {
 	hooksSettings, err := readJSONMap(hooksPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	hooksChanged := mergeCodexStopHook(hooksSettings)
+	hooksChanged := mergeCodexStopHook(hooksSettings, command...)
 	hooksOut, err := json.MarshalIndent(hooksSettings, "", "  ")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -155,21 +216,24 @@ func installCodexAt(hooksPath, configPath string, printOnly bool) int {
 	return 0
 }
 
-func mergeCodexStopHook(settings map[string]any) bool {
+func mergeCodexStopHook(settings map[string]any, command ...string) bool {
+	want := hookCommandOrDefault("codex", command)
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
 	stop, _ := hooks["Stop"].([]any)
-	if hasNestedCommand(stop, codexAgentStopCmd) {
-		return false
+	normalized, found, changed := normalizeNestedStopHook(stop, "codex", want)
+	hooks["Stop"] = normalized
+	if found {
+		return changed
 	}
 	entry := map[string]any{
 		"hooks": []any{
 			map[string]any{
 				"type":    "command",
-				"command": codexAgentStopCmd,
+				"command": want,
 			},
 		},
 	}
@@ -177,13 +241,13 @@ func mergeCodexStopHook(settings map[string]any) bool {
 	return true
 }
 
-func installCursorAt(path string, printOnly bool) int {
+func installCursorAt(path string, printOnly bool, command ...string) int {
 	settings, err := readJSONMap(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	changed := mergeCursorStopHook(settings)
+	changed := mergeCursorStopHook(settings, command...)
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -210,7 +274,8 @@ func installCursorAt(path string, printOnly bool) int {
 	return 0
 }
 
-func mergeCursorStopHook(settings map[string]any) bool {
+func mergeCursorStopHook(settings map[string]any, command ...string) bool {
+	want := hookCommandOrDefault("cursor", command)
 	changed := false
 	if _, ok := settings["version"]; !ok {
 		settings["version"] = float64(1)
@@ -223,11 +288,16 @@ func mergeCursorStopHook(settings map[string]any) bool {
 		changed = true
 	}
 	stop, _ := hooks["stop"].([]any)
-	if hasFlatCommand(stop, cursorAgentStopCmd) {
+	found, normalized := normalizeFlatStopHook(stop, "cursor", want)
+	if normalized {
+		changed = true
+	}
+	if found {
+		hooks["stop"] = stop
 		return changed
 	}
 	hooks["stop"] = append(stop, map[string]any{
-		"command":    cursorAgentStopCmd,
+		"command":    want,
 		"loop_limit": nil,
 	})
 	return true
@@ -309,6 +379,60 @@ func readJSONMap(path string) (map[string]any, error) {
 }
 
 func hasNestedCommand(stop []any, want string) bool {
+	_, ok := findNestedCommand(stop, func(command string) bool { return command == want })
+	return ok
+}
+
+func findNestedPrehandoverCommand(stop []any, harness string) (string, bool) {
+	return findNestedCommand(stop, func(command string) bool {
+		return isPrehandoverAgentStopCommand(command, harness)
+	})
+}
+
+func findNestedCommand(stop []any, match func(string) bool) (string, bool) {
+	for _, e := range stop {
+		em, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		hs, _ := em["hooks"].([]any)
+		for _, h := range hs {
+			hm, ok := h.(map[string]any)
+			if !ok {
+				continue
+			}
+			cmd, _ := hm["command"].(string)
+			if match(cmd) {
+				return cmd, true
+			}
+		}
+	}
+	return "", false
+}
+
+func findFlatPrehandoverCommand(stop []any, harness string) (string, bool) {
+	return findFlatCommand(stop, func(command string) bool {
+		return isPrehandoverAgentStopCommand(command, harness)
+	})
+}
+
+func findFlatCommand(stop []any, match func(string) bool) (string, bool) {
+	for _, e := range stop {
+		em, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		cmd, _ := em["command"].(string)
+		if match(cmd) {
+			return cmd, true
+		}
+	}
+	return "", false
+}
+
+func normalizeNestedStopHook(stop []any, harness, want string) ([]any, bool, bool) {
+	found := false
+	changed := false
 	for _, e := range stop {
 		em, ok := e.(map[string]any)
 		if !ok {
@@ -322,14 +446,22 @@ func hasNestedCommand(stop []any, want string) bool {
 			}
 			cmd, _ := hm["command"].(string)
 			if cmd == want {
-				return true
+				found = true
+				continue
+			}
+			if isPrehandoverAgentStopCommand(cmd, harness) {
+				hm["command"] = want
+				found = true
+				changed = true
 			}
 		}
 	}
-	return false
+	return stop, found, changed
 }
 
-func hasFlatCommand(stop []any, want string) bool {
+func normalizeFlatStopHook(stop []any, harness, want string) (bool, bool) {
+	found := false
+	changed := false
 	for _, e := range stop {
 		em, ok := e.(map[string]any)
 		if !ok {
@@ -337,8 +469,69 @@ func hasFlatCommand(stop []any, want string) bool {
 		}
 		cmd, _ := em["command"].(string)
 		if cmd == want {
-			return true
+			found = true
+			continue
+		}
+		if isPrehandoverAgentStopCommand(cmd, harness) {
+			em["command"] = want
+			found = true
+			changed = true
 		}
 	}
-	return false
+	return found, changed
+}
+
+func isPrehandoverAgentStopCommand(command, harness string) bool {
+	fields := shellFields(command)
+	if len(fields) < 4 {
+		return false
+	}
+	return filepath.Base(fields[0]) == "prehandover" &&
+		fields[1] == "hook" &&
+		fields[2] == harness &&
+		fields[3] == "agent_stop"
+}
+
+func shellFields(s string) []string {
+	var fields []string
+	var cur strings.Builder
+	var quote rune
+	escaped := false
+	flush := func() {
+		if cur.Len() == 0 {
+			return
+		}
+		fields = append(fields, cur.String())
+		cur.Reset()
+	}
+	for _, r := range s {
+		if escaped {
+			cur.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteRune(r)
+			continue
+		}
+		if r == '\'' || r == '"' {
+			quote = r
+			continue
+		}
+		if r == ' ' || r == '\t' || r == '\n' {
+			flush()
+			continue
+		}
+		cur.WriteRune(r)
+	}
+	flush()
+	return fields
 }

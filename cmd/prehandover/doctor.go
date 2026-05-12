@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -118,8 +119,12 @@ func checkClaudeInstalled() doctorResult {
 	}
 	hooks, _ := settings["hooks"].(map[string]any)
 	stop, _ := hooks["Stop"].([]any)
-	if !hasNestedCommand(stop, claudeAgentStopCmd) {
+	command, ok := findNestedPrehandoverCommand(stop, "claude")
+	if !ok {
 		return doctorResult{Message: fmt.Sprintf("Claude Stop hook does not call %q", claudeAgentStopCmd)}
+	}
+	if err := validateHookCommandExecutable(command); err != nil {
+		return doctorResult{Message: fmt.Sprintf("Claude Stop hook command is not executable: %v", err)}
 	}
 	return doctorResult{OK: true, Message: "Claude Stop hook is installed"}
 }
@@ -135,8 +140,12 @@ func checkCodexInstalled() doctorResult {
 	}
 	hooks, _ := settings["hooks"].(map[string]any)
 	stop, _ := hooks["Stop"].([]any)
-	if !hasNestedCommand(stop, codexAgentStopCmd) {
+	command, ok := findNestedPrehandoverCommand(stop, "codex")
+	if !ok {
 		return doctorResult{Message: fmt.Sprintf("Codex Stop hook does not call %q", codexAgentStopCmd)}
+	}
+	if err := validateHookCommandExecutable(command); err != nil {
+		return doctorResult{Message: fmt.Sprintf("Codex Stop hook command is not executable: %v", err)}
 	}
 
 	configPath := ".codex/config.toml"
@@ -161,10 +170,14 @@ func checkCursorInstalled() doctorResult {
 	}
 	hooks, _ := settings["hooks"].(map[string]any)
 	stop, _ := hooks["stop"].([]any)
-	if !hasFlatCommand(stop, cursorAgentStopCmd) {
+	command, ok := findFlatPrehandoverCommand(stop, "cursor")
+	if !ok {
 		return doctorResult{Message: fmt.Sprintf("Cursor stop hook does not call %q", cursorAgentStopCmd)}
 	}
-	if !cursorLoopLimitIsNil(stop, cursorAgentStopCmd) {
+	if err := validateHookCommandExecutable(command); err != nil {
+		return doctorResult{Message: fmt.Sprintf("Cursor stop hook command is not executable: %v", err)}
+	}
+	if !cursorLoopLimitIsNil(stop, command) {
 		return doctorResult{Message: "Cursor stop hook must set loop_limit = null for continuous enforcement"}
 	}
 	return doctorResult{OK: true, Message: "Cursor stop hook is installed with loop_limit = null"}
@@ -184,6 +197,28 @@ func codexHooksFeatureEnabled(data string) bool {
 		}
 	}
 	return false
+}
+
+func validateHookCommandExecutable(command string) error {
+	fields := shellFields(command)
+	if len(fields) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	exe := fields[0]
+	if strings.ContainsRune(exe, os.PathSeparator) {
+		info, err := os.Stat(exe)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || info.Mode()&0111 == 0 {
+			return fmt.Errorf("%s is not executable", exe)
+		}
+		return nil
+	}
+	if _, err := exec.LookPath(exe); err != nil {
+		return err
+	}
+	return nil
 }
 
 func cursorLoopLimitIsNil(stop []any, want string) bool {

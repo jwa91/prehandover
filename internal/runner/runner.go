@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -184,11 +186,14 @@ func runCheck(ctx context.Context, c config.Check, files []string, remaining tim
 	}
 
 	start := time.Now()
-	cmd := exec.CommandContext(cctx, name, args...)
-	cmd.Env = os.Environ()
-	for k, v := range c.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+	env := commandEnv(c.Env)
+	if !strings.ContainsRune(name, os.PathSeparator) {
+		if resolved, err := lookPathIn(name, envValue(env, "PATH")); err == nil {
+			name = resolved
+		}
 	}
+	cmd := exec.CommandContext(cctx, name, args...)
+	cmd.Env = env
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -210,6 +215,91 @@ func runCheck(ctx context.Context, c config.Check, files []string, remaining tim
 		r.Output = ""
 	}
 	return r
+}
+
+func commandEnv(overrides map[string]string) []string {
+	env := os.Environ()
+	for k, v := range overrides {
+		env = setEnv(env, k, v)
+	}
+	env = setEnv(env, "PATH", augmentPath(envValue(env, "PATH")))
+	return env
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	value := ""
+	for _, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			value = strings.TrimPrefix(item, prefix)
+		}
+	}
+	return value
+}
+
+func setEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	out := env[:0]
+	for _, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return append(out, prefix+value)
+}
+
+func augmentPath(path string) string {
+	seen := map[string]struct{}{}
+	var parts []string
+	add := func(path string) {
+		if path == "" {
+			return
+		}
+		if _, ok := seen[path]; ok {
+			return
+		}
+		seen[path] = struct{}{}
+		parts = append(parts, path)
+	}
+	for _, part := range filepath.SplitList(path) {
+		add(part)
+	}
+	if home := os.Getenv("HOME"); home != "" {
+		add(filepath.Join(home, "go", "bin"))
+		add(filepath.Join(home, ".local", "bin"))
+	}
+	for _, part := range []string{
+		"/opt/homebrew/bin",
+		"/opt/homebrew/sbin",
+		"/usr/local/bin",
+		"/usr/local/sbin",
+		"/usr/bin",
+		"/bin",
+		"/usr/sbin",
+		"/sbin",
+	} {
+		add(part)
+	}
+	return strings.Join(parts, string(os.PathListSeparator))
+}
+
+func lookPathIn(file, path string) (string, error) {
+	for _, dir := range filepath.SplitList(path) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := filepath.Join(dir, file)
+		info, err := os.Stat(candidate)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() || info.Mode()&0111 == 0 {
+			continue
+		}
+		return candidate, nil
+	}
+	return "", exec.ErrNotFound
 }
 
 func limitFiles(files []string, limit int) []string {

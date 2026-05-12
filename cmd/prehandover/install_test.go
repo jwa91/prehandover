@@ -10,6 +10,35 @@ import (
 
 // --- pure merge logic ---
 
+func TestInstallHookCommand_DefaultUsesPortableCommand(t *testing.T) {
+	t.Setenv(prehandoverBinEnv, "")
+
+	got, err := installHookCommand("codex")
+	if err != nil {
+		t.Fatalf("installHookCommand returned error: %v", err)
+	}
+	if got != codexAgentStopCmd {
+		t.Fatalf("command = %q, want %q", got, codexAgentStopCmd)
+	}
+}
+
+func TestInstallHookCommand_OverrideUsesAbsoluteCommand(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "pre handover")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(prehandoverBinEnv, bin)
+
+	got, err := installHookCommand("codex")
+	if err != nil {
+		t.Fatalf("installHookCommand returned error: %v", err)
+	}
+	want := agentStopCommand(bin, "codex")
+	if got != want {
+		t.Fatalf("command = %q, want %q", got, want)
+	}
+}
+
 func TestMergeClaudeStopHook_EmptyMap(t *testing.T) {
 	settings := map[string]any{}
 	changed := mergeClaudeStopHook(settings)
@@ -51,6 +80,33 @@ func TestMergeClaudeStopHook_Idempotent(t *testing.T) {
 	stop := settings["hooks"].(map[string]any)["Stop"].([]any)
 	if len(stop) != 1 {
 		t.Errorf("expected 1 Stop entry after double-merge, got %d", len(stop))
+	}
+}
+
+func TestMergeClaudeStopHook_ReplacesLegacyCommand(t *testing.T) {
+	settings := map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{
+					"matcher": "",
+					"hooks": []any{
+						map[string]any{"type": "command", "command": claudeAgentStopCmd},
+					},
+				},
+			},
+		},
+	}
+	want := agentStopCommand("/tmp/prehandover", "claude")
+	if !mergeClaudeStopHook(settings, want) {
+		t.Fatal("expected legacy command to be replaced")
+	}
+	stop := settings["hooks"].(map[string]any)["Stop"].([]any)
+	hooks := stop[0].(map[string]any)["hooks"].([]any)
+	if got := hooks[0].(map[string]any)["command"]; got != want {
+		t.Fatalf("command = %v, want %s", got, want)
+	}
+	if mergeClaudeStopHook(settings, want) {
+		t.Fatal("second merge should be a no-op")
 	}
 }
 
@@ -238,6 +294,22 @@ func TestMergeCodexStopHook_Idempotent(t *testing.T) {
 	}
 }
 
+func TestMergeCodexStopHook_ReplacesLegacyCommand(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCodexStopHook(settings) {
+		t.Fatal("first call should mutate")
+	}
+	want := agentStopCommand("/tmp/prehandover", "codex")
+	if !mergeCodexStopHook(settings, want) {
+		t.Fatal("expected legacy command to be replaced")
+	}
+	stop := settings["hooks"].(map[string]any)["Stop"].([]any)
+	hooks := stop[0].(map[string]any)["hooks"].([]any)
+	if got := hooks[0].(map[string]any)["command"]; got != want {
+		t.Fatalf("command = %v, want %s", got, want)
+	}
+}
+
 func TestMergeCursorStopHook_EmittedCommandShape(t *testing.T) {
 	settings := map[string]any{}
 	if !mergeCursorStopHook(settings) {
@@ -270,6 +342,24 @@ func TestMergeCursorStopHook_Idempotent(t *testing.T) {
 	stop := settings["hooks"].(map[string]any)["stop"].([]any)
 	if len(stop) != 1 {
 		t.Fatalf("expected 1 stop entry, got %d", len(stop))
+	}
+}
+
+func TestMergeCursorStopHook_ReplacesLegacyCommand(t *testing.T) {
+	settings := map[string]any{}
+	if !mergeCursorStopHook(settings) {
+		t.Fatal("first call should mutate")
+	}
+	want := agentStopCommand("/tmp/prehandover", "cursor")
+	if !mergeCursorStopHook(settings, want) {
+		t.Fatal("expected legacy command to be replaced")
+	}
+	stop := settings["hooks"].(map[string]any)["stop"].([]any)
+	if got := stop[0].(map[string]any)["command"]; got != want {
+		t.Fatalf("command = %v, want %s", got, want)
+	}
+	if stop[0].(map[string]any)["loop_limit"] != nil {
+		t.Fatalf("loop_limit = %v, want nil", stop[0].(map[string]any)["loop_limit"])
 	}
 }
 

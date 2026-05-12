@@ -28,6 +28,13 @@ pass_filenames = false
 budget = "5s"
 
 [[checks]]
+id = "lint"
+entry = "golangci-lint run ./..."
+files = { glob = ["**/*.go", ".golangci.yml"] }
+pass_filenames = false
+budget = "5s"
+
+[[checks]]
 id = "build"
 entry = "go build ./..."
 files = { glob = "**/*.go" }
