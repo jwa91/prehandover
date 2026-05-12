@@ -22,22 +22,6 @@ prehandover doctor         # verifies manifest and installed harness adapters
 prehandover run            # runs the checks
 ```
 
-## Development
-
-This repo keeps project-specific Go tools pinned in `go.mod` and system-level
-CLI tools in the dotfiles `Brewfile`.
-
-```sh
-make install     # install current checkout to GOPATH/bin for local hooks
-make check       # fmt, vet, staticcheck, govulncheck, build, tests
-make lint        # golangci-lint
-make race        # race detector
-```
-
-If a GUI reports `hook exited with code 127`, it could not find the
-`prehandover` binary. Run `make install` and make sure `$(go env GOPATH)/bin`
-is loaded by your shell startup files.
-
 Wire it into Claude Code:
 
 ```sh
