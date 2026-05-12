@@ -119,8 +119,8 @@ func (p *PassFilenames) UnmarshalTOML(v interface{}) error {
 	case bool:
 		p.Enabled = x
 	case int64:
-		if x < 0 {
-			return fmt.Errorf("pass_filenames: limit must be non-negative, got %d", x)
+		if x <= 0 {
+			return fmt.Errorf("pass_filenames: limit must be a positive integer, got %d", x)
 		}
 		p.Enabled = true
 		p.Limit = int(x)

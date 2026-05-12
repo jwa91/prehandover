@@ -260,6 +260,15 @@ pass_filenames = "yes"
 `,
 		},
 		{
+			name: "zero",
+			body: `
+[[checks]]
+id = "x"
+entry = "true"
+pass_filenames = 0
+`,
+		},
+		{
 			name: "negative int",
 			body: `
 [[checks]]
