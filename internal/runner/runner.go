@@ -239,7 +239,7 @@ func envValue(env []string, key string) string {
 
 func setEnv(env []string, key, value string) []string {
 	prefix := key + "="
-	out := env[:0]
+	out := make([]string, 0, len(env)+1)
 	for _, item := range env {
 		if strings.HasPrefix(item, prefix) {
 			continue

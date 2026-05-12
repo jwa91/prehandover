@@ -204,6 +204,40 @@ func TestCommandEnv_AugmentsSparseHookPath(t *testing.T) {
 	}
 }
 
+func TestSetEnv_DoesNotMutateInput(t *testing.T) {
+	in := []string{"A=1", "B=2", "C=3"}
+	snapshot := append([]string(nil), in...)
+
+	out := setEnv(in, "B", "9")
+
+	if len(in) != len(snapshot) {
+		t.Fatalf("input length changed: %v vs %v", in, snapshot)
+	}
+	for i := range in {
+		if in[i] != snapshot[i] {
+			t.Errorf("input mutated at [%d]: got %q, want %q", i, in[i], snapshot[i])
+		}
+	}
+
+	want := []string{"A=1", "C=3", "B=9"}
+	if len(out) != len(want) {
+		t.Fatalf("output = %v, want %v", out, want)
+	}
+	for i := range want {
+		if out[i] != want[i] {
+			t.Errorf("output[%d] = %q, want %q", i, out[i], want[i])
+		}
+	}
+}
+
+func TestSetEnv_AppendsWhenKeyAbsent(t *testing.T) {
+	in := []string{"A=1"}
+	out := setEnv(in, "B", "2")
+	if len(out) != 2 || out[0] != "A=1" || out[1] != "B=2" {
+		t.Errorf("setEnv appended wrong: got %v", out)
+	}
+}
+
 func TestSplitEntry(t *testing.T) {
 	cases := []struct {
 		name string

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jwa91/prehandover/internal/changeset"
@@ -162,9 +163,14 @@ func cmdHook(args []string) int {
 		return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "hook_input_error", fmt.Errorf("prehandover could not parse hook input: %w", err))
 	}
 	if inv.CWD != "" {
-		if err := os.Chdir(inv.CWD); err != nil {
+		if !filepath.IsAbs(inv.CWD) {
+			return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "execution_error", fmt.Errorf("prehandover requires an absolute hook cwd, got %q", inv.CWD))
+		}
+		clean := filepath.Clean(inv.CWD)
+		if err := os.Chdir(clean); err != nil {
 			return encodeHookFailureWithProof(adapter, parsed.moment, inv, parsed.configPath, "execution_error", fmt.Errorf("prehandover could not use hook cwd %q: %w", inv.CWD, err))
 		}
+		inv.CWD = clean
 	}
 
 	cfg, err := config.Load(parsed.configPath)

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -87,6 +88,76 @@ func TestCmdDoctor_FailsWhenHookCommandCannotExecute(t *testing.T) {
 	}
 	if rc := cmdDoctor(nil); rc == 0 {
 		t.Fatal("doctor should fail when the hook executable is missing")
+	}
+}
+
+// The installed-hook matcher checks the *shape* of the command (any binary
+// whose basename is "prehandover" + the right subcommand). So the "not
+// installed" message must not pretend a specific literal string is required —
+// otherwise a perfectly valid absolute-path install reads as a discrepancy.
+func TestCheckInstalled_NotInstalledMessageIsGeneric(t *testing.T) {
+	cases := []struct {
+		name     string
+		setup    func(t *testing.T)
+		check    func() doctorResult
+		harness  string
+		litToken string
+	}{
+		{
+			name: "claude",
+			setup: func(t *testing.T) {
+				mustWriteJSON(t, ".claude/settings.json", "{}")
+			},
+			check:    checkClaudeInstalled,
+			harness:  "claude",
+			litToken: `"prehandover hook claude agent_stop"`,
+		},
+		{
+			name: "codex",
+			setup: func(t *testing.T) {
+				mustWriteJSON(t, ".codex/hooks.json", "{}")
+			},
+			check:    checkCodexInstalled,
+			harness:  "codex",
+			litToken: `"prehandover hook codex agent_stop"`,
+		},
+		{
+			name: "cursor",
+			setup: func(t *testing.T) {
+				mustWriteJSON(t, ".cursor/hooks.json", "{}")
+			},
+			check:    checkCursorInstalled,
+			harness:  "cursor",
+			litToken: `"prehandover hook cursor agent_stop"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			withChdir(t, dir)
+			tc.setup(t)
+
+			r := tc.check()
+			if r.OK {
+				t.Fatalf("expected not-OK when hook entry is absent, got %+v", r)
+			}
+			if strings.Contains(r.Message, tc.litToken) {
+				t.Errorf("message references literal command %s, but matching is shape-based: %q", tc.litToken, r.Message)
+			}
+			if !strings.Contains(r.Message, "prehandover install "+tc.harness) {
+				t.Errorf("message should suggest 'prehandover install %s': %q", tc.harness, r.Message)
+			}
+		})
+	}
+}
+
+func mustWriteJSON(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
 	}
 }
 

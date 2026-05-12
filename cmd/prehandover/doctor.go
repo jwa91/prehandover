@@ -121,7 +121,7 @@ func checkClaudeInstalled() doctorResult {
 	stop, _ := hooks["Stop"].([]any)
 	command, ok := findNestedPrehandoverCommand(stop, "claude")
 	if !ok {
-		return doctorResult{Message: fmt.Sprintf("Claude Stop hook does not call %q", claudeAgentStopCmd)}
+		return doctorResult{Message: "Claude Stop hook not installed (run: prehandover install claude)"}
 	}
 	if err := validateHookCommandExecutable(command); err != nil {
 		return doctorResult{Message: fmt.Sprintf("Claude Stop hook command is not executable: %v", err)}
@@ -142,7 +142,7 @@ func checkCodexInstalled() doctorResult {
 	stop, _ := hooks["Stop"].([]any)
 	command, ok := findNestedPrehandoverCommand(stop, "codex")
 	if !ok {
-		return doctorResult{Message: fmt.Sprintf("Codex Stop hook does not call %q", codexAgentStopCmd)}
+		return doctorResult{Message: "Codex Stop hook not installed (run: prehandover install codex)"}
 	}
 	if err := validateHookCommandExecutable(command); err != nil {
 		return doctorResult{Message: fmt.Sprintf("Codex Stop hook command is not executable: %v", err)}
@@ -172,7 +172,7 @@ func checkCursorInstalled() doctorResult {
 	stop, _ := hooks["stop"].([]any)
 	command, ok := findFlatPrehandoverCommand(stop, "cursor")
 	if !ok {
-		return doctorResult{Message: fmt.Sprintf("Cursor stop hook does not call %q", cursorAgentStopCmd)}
+		return doctorResult{Message: "Cursor stop hook not installed (run: prehandover install cursor)"}
 	}
 	if err := validateHookCommandExecutable(command); err != nil {
 		return doctorResult{Message: fmt.Sprintf("Cursor stop hook command is not executable: %v", err)}
