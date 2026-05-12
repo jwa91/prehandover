@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://prehandover.local/schema.json",
+  "$id": "https://raw.githubusercontent.com/jwa91/prehandover/main/schema.json",
   "title": "prehandover.toml",
-  "description": "Configuration for prehandover — unified agent-stop validation. TODO: publish at https://schemas.janwillemaltink.com/prehandover.json once the repo goes public.",
+  "description": "Configuration for prehandover — unified agent-stop validation.",
   "type": "object",
   "additionalProperties": false,
   "required": ["manifest"],
