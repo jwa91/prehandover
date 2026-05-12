@@ -309,36 +309,75 @@ func limitFiles(files []string, limit int) []string {
 	return files
 }
 
+// splitEntry tokenizes a shell-like command string with POSIX-style quoting.
+// Single quotes preserve all characters literally. Double quotes and unquoted
+// segments honor backslash as an escape for the next character. A token starts
+// once any character (quoted or unquoted) is consumed, so empty quoted strings
+// produce empty tokens and adjacent quoted segments concatenate.
 func splitEntry(entry string) ([]string, error) {
-	var parts []string
-	var cur []byte
-	var quote byte
+	var (
+		parts   []string
+		cur     []byte
+		quote   byte // 0, '\'', or '"'
+		inToken bool
+	)
+	flush := func() {
+		if inToken {
+			parts = append(parts, string(cur))
+			cur = cur[:0]
+			inToken = false
+		}
+	}
 	for i := 0; i < len(entry); i++ {
 		ch := entry[i]
-		if quote != 0 {
-			if ch == quote {
+		switch quote {
+		case '\'':
+			if ch == '\'' {
 				quote = 0
 				continue
 			}
 			cur = append(cur, ch)
-			continue
-		}
-		if ch == '"' || ch == '\'' {
-			quote = ch
-			continue
-		}
-		if ch == ' ' || ch == '\t' {
-			if len(cur) > 0 {
-				parts = append(parts, string(cur))
-				cur = cur[:0]
+		case '"':
+			if ch == '\\' {
+				if i+1 >= len(entry) {
+					return nil, errors.New("trailing backslash")
+				}
+				i++
+				cur = append(cur, entry[i])
+				continue
 			}
-			continue
+			if ch == '"' {
+				quote = 0
+				continue
+			}
+			cur = append(cur, ch)
+		default:
+			if ch == '\\' {
+				if i+1 >= len(entry) {
+					return nil, errors.New("trailing backslash")
+				}
+				i++
+				cur = append(cur, entry[i])
+				inToken = true
+				continue
+			}
+			if ch == '"' || ch == '\'' {
+				quote = ch
+				inToken = true
+				continue
+			}
+			if ch == ' ' || ch == '\t' {
+				flush()
+				continue
+			}
+			cur = append(cur, ch)
+			inToken = true
 		}
-		cur = append(cur, ch)
 	}
-	if len(cur) > 0 {
-		parts = append(parts, string(cur))
+	if quote != 0 {
+		return nil, fmt.Errorf("unterminated %c-quoted string", quote)
 	}
+	flush()
 	if len(parts) == 0 {
 		return nil, errors.New("empty entry")
 	}

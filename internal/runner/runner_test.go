@@ -206,29 +206,59 @@ func TestCommandEnv_AugmentsSparseHookPath(t *testing.T) {
 
 func TestSplitEntry(t *testing.T) {
 	cases := []struct {
+		name string
 		in   string
 		want []string
 	}{
-		{"true", []string{"true"}},
-		{"go vet ./...", []string{"go", "vet", "./..."}},
-		{`echo "hello world"`, []string{"echo", "hello world"}},
-		{`prettier --check`, []string{"prettier", "--check"}},
+		{"single token", "true", []string{"true"}},
+		{"multi token", "go vet ./...", []string{"go", "vet", "./..."}},
+		{"double quoted", `echo "hello world"`, []string{"echo", "hello world"}},
+		{"flag", `prettier --check`, []string{"prettier", "--check"}},
+
+		{"escaped space unquoted", `cmd a\ b`, []string{"cmd", "a b"}},
+		{"escaped backslash unquoted", `cmd a\\b`, []string{"cmd", `a\b`}},
+		{"escaped quote unquoted", `cmd a\"b`, []string{"cmd", `a"b`}},
+		{"escaped quote in dquotes", `cmd "a\"b"`, []string{"cmd", `a"b`}},
+		{"escaped backslash in dquotes", `cmd "a\\b"`, []string{"cmd", `a\b`}},
+		{"single quotes preserve backslash", `cmd 'a\b'`, []string{"cmd", `a\b`}},
+		{"single quotes preserve double-backslash", `cmd 'a\\b'`, []string{"cmd", `a\\b`}},
+		{"adjacent quoted segments", `cmd "ab"'cd'`, []string{"cmd", "abcd"}},
 	}
 	for _, tc := range cases {
-		got, err := splitEntry(tc.in)
-		if err != nil {
-			t.Errorf("%q: %v", tc.in, err)
-			continue
-		}
-		if len(got) != len(tc.want) {
-			t.Errorf("%q: got %v, want %v", tc.in, got, tc.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != tc.want[i] {
-				t.Errorf("%q: [%d] got %q, want %q", tc.in, i, got[i], tc.want[i])
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := splitEntry(tc.in)
+			if err != nil {
+				t.Fatalf("splitEntry(%q): %v", tc.in, err)
 			}
-		}
+			if len(got) != len(tc.want) {
+				t.Fatalf("splitEntry(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("splitEntry(%q)[%d] = %q, want %q", tc.in, i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSplitEntry_Errors(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"only whitespace", "   \t"},
+		{"unterminated double quote", `echo "hello`},
+		{"unterminated single quote", `echo 'hello`},
+		{"trailing backslash", `echo foo\`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := splitEntry(tc.in); err == nil {
+				t.Errorf("splitEntry(%q): expected error", tc.in)
+			}
+		})
 	}
 }
 
