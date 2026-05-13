@@ -7,6 +7,11 @@ follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- Refreshed release documentation to match the current `homebrew_casks`
+  distribution path (`Casks/prehandover.rb`).
+
 ## [0.1.1] — 2026-05-13
 
 ### Changed

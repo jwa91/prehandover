@@ -8,7 +8,7 @@ Releases are driven by annotated `v*` tags. GitHub Releases are the changelog so
 2. Create a fine-grained GitHub PAT with `Contents: read and write` on `jwa91/homebrew-tap` only.
 3. Add that PAT to `jwa91/prehandover` as the repository secret `HOMEBREW_TAP_GITHUB_TOKEN`.
 
-GoReleaser's `brews` support is deprecated upstream in favor of casks, but this project intentionally uses a Homebrew Formula because prehandover is a CLI and `brew install` is the expected Homebrew interface for command-line tools. Keep GoReleaser pinned in `.github/workflows/release.yml` and run `goreleaser check` before tagging.
+This project ships through GoReleaser `homebrew_casks`, matching the rest of the `jwa-*` CLI family. Homebrew still installs it with `brew install jwa91/tap/prehandover`; the tap artifact lives at `Casks/prehandover.rb`.
 
 Prerelease tags such as `v0.1.0-rc.1` publish a GitHub prerelease but do not update the Homebrew tap.
 
@@ -43,7 +43,7 @@ git push origin vX.Y.Z
 
 4. Watch `.github/workflows/release.yml`.
 5. Confirm the GitHub Release published with four archives and `checksums.txt`.
-6. Confirm `Formula/prehandover.rb` landed in `jwa91/homebrew-tap`.
+6. Confirm `Casks/prehandover.rb` landed in `jwa91/homebrew-tap`.
 7. Confirm the smoke job passed.
 
 Final sanity on a clean machine:
