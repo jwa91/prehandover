@@ -2,6 +2,10 @@ version: 2
 
 project_name: prehandover
 
+before:
+  hooks:
+    - go mod tidy
+
 builds:
   - id: prehandover
     main: ./cmd/prehandover
@@ -32,14 +36,14 @@ archives:
       - prehandover
     formats:
       - tar.gz
-    name_template: >-
-      {{ .ProjectName }}_{{ title .Os }}_{{ if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
 
 changelog:
   sort: asc
+  use: github
   filters:
     exclude:
       - "^Merge "
@@ -89,5 +93,8 @@ homebrew_casks:
     commit_msg_template: "feat(prehandover): cask update to {{ .Tag }}"
 
 release:
+  github:
+    owner: jwa91
+    name: prehandover
   draft: false
   prerelease: auto

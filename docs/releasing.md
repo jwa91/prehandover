@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are driven by annotated `v*` tags. GitHub Releases are the changelog source of truth; this repo does not keep a `CHANGELOG.md`.
+Releases are driven by annotated `v*` tags. GitHub Releases are the canonical release notes; this repo also keeps a high-level `CHANGELOG.md`.
 
 ## One-Time Setup
 
@@ -24,7 +24,7 @@ Inspect a snapshot binary:
 
 ```sh
 tmp="$(mktemp -d)"
-tar -xzf dist/prehandover_Darwin_arm64.tar.gz -C "$tmp"
+tar -xzf dist/prehandover_X.Y.Z_darwin_arm64.tar.gz -C "$tmp"
 "$tmp/prehandover" --version
 ```
 

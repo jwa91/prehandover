@@ -46,8 +46,6 @@ release: ## Local signed + notarized release (usage: make release VERSION=X.Y.Z)
 	head=$$(git rev-parse HEAD); \
 	test -n "$$existing" && test "$$existing" = "$$head" || \
 	  (echo "v$(VERSION) must exist and point at HEAD before release"; exit 3)
-	# Build + codesign + archive + publish + commit Cask back to the tap.
+	# Build + codesign/notarize + archive + publish + commit Cask back to the tap.
 	GITHUB_TOKEN="$$(gh auth token)" \
 	  jwa-harden run -- goreleaser release --clean
-	# Submit each codesigned darwin binary to notarytool.
-	scripts/notarize-darwin.sh prehandover $(VERSION)
