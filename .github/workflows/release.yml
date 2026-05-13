@@ -77,7 +77,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -eu
-          asset="prehandover_Linux_x86_64.tar.gz"
+          asset="prehandover_${TAG#v}_linux_amd64.tar.gz"
           base="https://github.com/${GH_REPO}/releases/download/${TAG}"
           curl -fsSLO "${base}/${asset}"
           curl -fsSLO "${base}/checksums.txt"

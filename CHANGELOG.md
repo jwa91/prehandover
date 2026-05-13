@@ -7,6 +7,19 @@ follow [SemVer](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- Enforced notarization inside the GoReleaser build hook so releases cut via
+  raw `goreleaser release --clean` are notarized (not only releases run via
+  `make release`).
+
+### Changed
+
+- Refreshed release documentation to match the current `homebrew_casks`
+  distribution path (`Casks/prehandover.rb`).
+- Standardized GoReleaser archive naming to
+  `{project}_{version}_{os}_{arch}` for family consistency.
+
 ## [0.1.1] — 2026-05-13
 
 ### Changed
