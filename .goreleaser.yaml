@@ -20,6 +20,11 @@ builds:
         -X github.com/jwa91/prehandover/internal/version.Current={{ .Version }}
         -X github.com/jwa91/prehandover/internal/version.Commit={{ .ShortCommit }}
         -X github.com/jwa91/prehandover/internal/version.Date={{ .Date }}
+    hooks:
+      # Codesign darwin binaries with Developer ID + hardened runtime.
+      # No-op on linux and when MACOS_SIGN_IDENTITY is unset (CI).
+      post:
+        - cmd: 'scripts/codesign.sh "{{ .Target }}" "{{ .Path }}"'
 
 archives:
   - id: default
@@ -60,10 +65,11 @@ changelog:
     - title: Other
       order: 999
 
-# GoReleaser deprecated `brews` in v2.10 in favor of casks. This project still
-# uses a Formula because prehandover is a CLI and `brew install` is the expected
-# Homebrew UX for command-line tools.
-brews:
+# Modern Homebrew distribution for pre-compiled binaries (ADR 0008 in
+# jwa91/homebrew-tap). Publishes Casks/prehandover.rb back to the tap.
+# `brew install jwa91/tap/prehandover` is unchanged — modern brew
+# auto-detects the cask kind.
+homebrew_casks:
   - name: prehandover
     ids:
       - default
@@ -72,15 +78,15 @@ brews:
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    skip_upload: auto
+    directory: Casks
     homepage: https://github.com/jwa91/prehandover
     description: Unified agent-stop validation for repo-owned agent harness contracts
     license: MIT
-    install: |
-      bin.install "prehandover"
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/prehandover --version")
+    binaries: [prehandover]
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "feat(prehandover): cask update to {{ .Tag }}"
 
 release:
   draft: false

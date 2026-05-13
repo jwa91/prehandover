@@ -1,9 +1,13 @@
 name: Release
 
+# Manual-only until CI has signing credentials (Developer ID .p12 +
+# App Store Connect API key). Local releases via `make release
+# VERSION=X.Y.Z` are the canonical path for now — see Makefile.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+  # push:
+  #   tags:
+  #     - "v*"
 
 permissions:
   contents: read
