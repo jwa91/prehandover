@@ -15,6 +15,7 @@ import (
 	"github.com/jwa91/prehandover/internal/proof"
 	"github.com/jwa91/prehandover/internal/report"
 	"github.com/jwa91/prehandover/internal/runner"
+	"github.com/jwa91/prehandover/internal/version"
 )
 
 const sampleConfig = `#:schema ./schema.json
@@ -57,6 +58,7 @@ Usage:
   prehandover init [--path=prehandover.toml] [--force]
   prehandover validate [--config=prehandover.toml]
   prehandover install [--print] <harness>    (supported: claude, codex, cursor)
+  prehandover version
 
 Run prehandover from the repo root; it reads prehandover.toml by default.
 Exit codes: 0 pass, 1 fail, 2 config error, 3 budget exceeded with no fails.`)
@@ -80,6 +82,9 @@ func main() {
 		os.Exit(cmdValidate(os.Args[2:]))
 	case "install":
 		os.Exit(cmdInstall(os.Args[2:]))
+	case "version", "--version", "-v":
+		fmt.Fprintln(os.Stdout, versionLine())
+		os.Exit(0)
 	case "-h", "--help", "help":
 		usage()
 		os.Exit(0)
@@ -88,6 +93,11 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
+}
+
+func versionLine() string {
+	info := version.Info()
+	return fmt.Sprintf("prehandover %s (%s, %s)", info.Version, info.Commit, info.Date)
 }
 
 func cmdRun(args []string) int {

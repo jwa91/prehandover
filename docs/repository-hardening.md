@@ -35,6 +35,13 @@ Before merging broad changes:
 make check
 ```
 
+Before creating a release tag:
+
+```sh
+goreleaser check
+goreleaser release --snapshot --clean --skip=publish
+```
+
 ## Release expectations
 
 Release automation should be tag-driven. A release tag like `v0.1.0` should:
@@ -46,4 +53,3 @@ Release automation should be tag-driven. A release tag like `v0.1.0` should:
 - produce release notes or a changelog entry.
 
 Do not grant write permissions to normal CI jobs. Release jobs should request only the write scopes they need.
-

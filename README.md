@@ -8,8 +8,32 @@ prehandover is one config in your repo that every harness can call at the `agent
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```sh
+brew install jwa91/tap/prehandover
+```
+
+### Standalone install script
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jwa91/prehandover/main/scripts/install.sh | sh
+```
+
+### Direct download
+
+Download an archive and `checksums.txt` from the [latest GitHub Release](https://github.com/jwa91/prehandover/releases/latest).
+
+### Go
+
 ```sh
 go install github.com/jwa91/prehandover/cmd/prehandover@latest
+```
+
+Verify the install:
+
+```sh
+prehandover --version
 ```
 
 ## Quickstart

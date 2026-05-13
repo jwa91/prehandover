@@ -1,0 +1,87 @@
+version: 2
+
+project_name: prehandover
+
+builds:
+  - id: prehandover
+    main: ./cmd/prehandover
+    binary: prehandover
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/jwa91/prehandover/internal/version.Current={{ .Version }}
+        -X github.com/jwa91/prehandover/internal/version.Commit={{ .ShortCommit }}
+        -X github.com/jwa91/prehandover/internal/version.Date={{ .Date }}
+
+archives:
+  - id: default
+    ids:
+      - prehandover
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ title .Os }}_{{ if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^Merge "
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+  groups:
+    - title: Features
+      regexp: "^.*feat(\\(.+\\))??!?:.+$"
+      order: 0
+    - title: Fixes
+      regexp: "^.*fix(\\(.+\\))??!?:.+$"
+      order: 1
+    - title: Performance
+      regexp: "^.*perf(\\(.+\\))??!?:.+$"
+      order: 2
+    - title: Refactors
+      regexp: "^.*refactor(\\(.+\\))??!?:.+$"
+      order: 3
+    - title: Chores
+      regexp: "^.*chore(\\(.+\\))??!?:.+$"
+      order: 4
+    - title: Other
+      order: 999
+
+# GoReleaser deprecated `brews` in v2.10 in favor of casks. This project still
+# uses a Formula because prehandover is a CLI and `brew install` is the expected
+# Homebrew UX for command-line tools.
+brews:
+  - name: prehandover
+    ids:
+      - default
+    repository:
+      owner: jwa91
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    skip_upload: auto
+    homepage: https://github.com/jwa91/prehandover
+    description: Unified agent-stop validation for repo-owned agent harness contracts
+    license: MIT
+    install: |
+      bin.install "prehandover"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/prehandover --version")
+
+release:
+  draft: false
+  prerelease: auto
