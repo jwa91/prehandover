@@ -7,3 +7,8 @@
 
 # Local scratch space — harness docs, notes, anything not meant to ship
 /scratch/
+
+# Forbidden by security ground rules — only .env.template is allowed.
+.env
+.env.local
+.env.*.local
