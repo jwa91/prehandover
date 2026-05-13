@@ -30,4 +30,4 @@ test: ## Run tests
 race: ## Run tests with race detector
 	go test -race ./...
 
-check: fmt vet staticcheck vuln build test ## Run the local verification suite
+check: fmt vet lint staticcheck vuln build test ## Run the local verification suite

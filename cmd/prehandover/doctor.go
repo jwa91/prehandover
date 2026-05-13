@@ -54,10 +54,11 @@ func cmdDoctor(args []string) int {
 }
 
 func checkVersion(required string) doctorResult {
-	if compareVersions(version.Current, required) < 0 {
-		return doctorResult{Message: fmt.Sprintf("prehandover %s is older than manifest.required_prehandover %s", version.Current, required)}
+	current := version.Version()
+	if compareVersions(current, required) < 0 {
+		return doctorResult{Message: fmt.Sprintf("prehandover %s is older than manifest.required_prehandover %s", current, required)}
 	}
-	return doctorResult{OK: true, Message: fmt.Sprintf("prehandover %s satisfies required %s", version.Current, required)}
+	return doctorResult{OK: true, Message: fmt.Sprintf("prehandover %s satisfies required %s", current, required)}
 }
 
 func checkMomentManifest(moments []string) []doctorResult {
@@ -237,6 +238,9 @@ func cursorLoopLimitIsNil(stop []any, want string) bool {
 }
 
 func compareVersions(current, required string) int {
+	if isDevelopmentVersion(current) {
+		return 1
+	}
 	c := versionParts(current)
 	r := versionParts(required)
 	for i := 0; i < len(c) || i < len(r); i++ {
@@ -258,6 +262,10 @@ func compareVersions(current, required string) int {
 }
 
 func versionParts(v string) []int {
+	v = strings.TrimPrefix(v, "v")
+	if i := strings.IndexAny(v, "-+"); i >= 0 {
+		v = v[:i]
+	}
 	var parts []int
 	for _, p := range strings.Split(v, ".") {
 		n, err := strconv.Atoi(p)
@@ -268,4 +276,9 @@ func versionParts(v string) []int {
 		parts = append(parts, n)
 	}
 	return parts
+}
+
+func isDevelopmentVersion(v string) bool {
+	v = strings.TrimSpace(strings.ToLower(v))
+	return v == "dev" || v == "(devel)"
 }
